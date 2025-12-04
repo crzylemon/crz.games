@@ -125,20 +125,21 @@
             <a href="/vid/" class="cta">Start Watching</a>
         </section>
 
+        <?php
+        require_once 'api.php';
+        $stats = api('stats');
+        ?>
         <section class="stats">
             <div class="stat-card">
-                <div class="number">5+</div>
-                <div class="actual-number">Actual: <?php echo json_decode(file_get_contents('/api.php?endpoint=stats'), true)['videos'] ?? 6; ?></div>
+                <div class="number"><?php echo $stats['videos']; ?></div>
                 <div class="label">Videos Uploaded</div>
             </div>
             <div class="stat-card">
-                <div class="number">10+</div>
-                <div class="actual-number">Actual: <?php echo json_decode(file_get_contents('/api.php?endpoint=stats'), true)['users'] ?? 17; ?></div>
+                <div class="number"><?php echo $stats['users']; ?></div>
                 <div class="label">Active Users</div>
             </div>
             <div class="stat-card">
-                <div class="number">5+</div>
-                <div class="actual-number">Actual: <?php echo json_decode(file_get_contents('/api.php?endpoint=stats'), true)['games'] ?? 6; ?></div>
+                <div class="number"><?php echo $stats['games']; ?></div>
                 <div class="label">Games Available</div>
             </div>
             <div class="stat-card">
@@ -147,22 +148,31 @@
             </div>
         </section>
 
+        <?php
+        $reviews = api('reviews');
+        ?>
         <section style="margin: 40px 0; background: #2c2a33; padding: 30px; border-radius: 12px;">
             <h2 style="text-align: center; color: #ff4757; margin-bottom: 30px;">What Our Users Think of Us</h2>
             <div style="display: grid; grid-template-columns: repeat(auto-fit,300px); gap: 20px;justify-content: center;">
+                <?php if (empty($reviews)): ?>
+                <div style="background: #444; padding: 20px; border-radius: 8px;">
+                    <p style="color: #ccc; line-height: 1.4;">No reviews available at the moment.</p>
+                </div>
+                <?php else: ?>
+                <?php foreach ($reviews as $review): ?>
                 <div style="background: #444; padding: 20px; border-radius: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <strong>Anonymous</strong>
+                        <strong><?php echo htmlspecialchars($review['name'] ?? 'Anonymous'); ?></strong>
                         <div>
+                            <?php for ($i = 0; $i < ($review['rating'] ?? 5); $i++): ?>
                             <img src="starfilled.svg" style="width: 16px; height: 16px;">
-                            <img src="starfilled.svg" style="width: 16px; height: 16px;">
-                            <img src="starfilled.svg" style="width: 16px; height: 16px;">
-                            <img src="starfilled.svg" style="width: 16px; height: 16px;">
-                            <img src="starfilled.svg" style="width: 16px; height: 16px;">
+                            <?php endfor; ?>
                         </div>
                     </div>
-                    <p style="color: #ccc; line-height: 1.4;">CRZ.Videos has completely changed how I share my content. The livestreams run smoothly, and the Boost Tokens system actually rewards my community for ...</p>
+                    <p style="color: #ccc; line-height: 1.4;"><?php echo htmlspecialchars($review['comment'] ?? ''); ?></p>
                 </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
             </div>
             <div style="text-align: center; margin-top: 20px;">
                 <a href="/vid/review.php" style="background: #ff4757; color: #fff; padding: 10px 20px; border-radius: 20px; text-decoration: none; font-weight: 500;">Leave a Review</a>
