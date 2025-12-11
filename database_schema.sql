@@ -1,20 +1,18 @@
 -- CRZ Network Database Schema
 
 -- Users table (for API compatibility)
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id INT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(32) NOT NULL UNIQUE,
     display_name VARCHAR(64) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    CONSTRAINT chk_users_username CHECK (username REGEXP '^[a-zA-Z0-9_-]+$')
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- Games table
-CREATE TABLE games (
+CREATE TABLE IF NOT EXISTS games (
     id INT PRIMARY KEY AUTO_INCREMENT,
     title VARCHAR(255) NOT NULL,
     description TEXT,
@@ -27,7 +25,7 @@ CREATE TABLE games (
 );
 
 -- Videos table
-CREATE TABLE videos (
+CREATE TABLE IF NOT EXISTS videos (
     id INT PRIMARY KEY AUTO_INCREMENT,
     title VARCHAR(255) NOT NULL,
     description TEXT,
@@ -44,10 +42,10 @@ CREATE TABLE videos (
 );
 
 -- Reviews table
-CREATE TABLE reviews (
+CREATE TABLE IF NOT EXISTS reviews (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
-    rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    rating INT NOT NULL,
     comment TEXT,
     user_id INT,
     game_id INT,
@@ -57,8 +55,8 @@ CREATE TABLE reviews (
     FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE SET NULL
 );
 
--- Users/Accounts table (for network features)
-CREATE TABLE accounts (
+-- Accounts table (for network features)
+CREATE TABLE IF NOT EXISTS accounts (
     id INT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(32) NOT NULL UNIQUE,
     display_name VARCHAR(64) NOT NULL,
@@ -67,14 +65,11 @@ CREATE TABLE accounts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     last_login TIMESTAMP NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    
-    -- Username constraints: alphanumeric, underscore, hyphen only
-    CONSTRAINT chk_username CHECK (username REGEXP '^[a-zA-Z0-9_-]+$')
+    is_active BOOLEAN DEFAULT TRUE
 );
 
 -- Friends table for friend relationships
-CREATE TABLE friends (
+CREATE TABLE IF NOT EXISTS friends (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
     friend_id INT NOT NULL,
@@ -87,7 +82,7 @@ CREATE TABLE friends (
 );
 
 -- User sessions for login management
-CREATE TABLE user_sessions (
+CREATE TABLE IF NOT EXISTS user_sessions (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
     session_token VARCHAR(255) NOT NULL UNIQUE,
