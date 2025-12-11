@@ -4,8 +4,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CRZ.Network</title>
     <style>
+
+        
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Roboto', 'Arial', sans-serif; background: #0f0f0f; color: #fff; }
+        body { font-family: 'Roboto', 'Arial', sans-serif; background: #aaa; color: #333; }
         
         .header { background: #212121; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #303030; }
         .header .logo { display: flex; align-items: center; }
@@ -27,10 +30,10 @@
         .sidebar .menu-item img { width: 20px; height: 20px; }
         
         .main-content { margin-left: 240px; padding: 24px; }
-        .hero { background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%); padding: 60px 40px; border-radius: 12px; margin-bottom: 32px; text-align: center; }
+        .hero {  padding: 60px 40px; border-radius: 5px; margin-bottom: 32px; text-align: center; border: 2px solid #333;box-shadow: 0px 5px 10px #0003;}
         .hero h1 { font-size: 48px; font-weight: 700; margin-bottom: 16px; }
-        .hero p { font-size: 18px; opacity: 0.9; margin-bottom: 32px; }
-        .hero .cta { background: #fff; color: #ff4444; padding: 12px 24px; border-radius: 24px; text-decoration: none; font-weight: 600; display: inline-block; }
+        .hero p { font-size: 18px;  margin-bottom: 32px; text-shadow: 0px 1px 0px #0003;}
+        .hero .cta {  color: #333; padding: 12px 24px; border-radius: 5px; text-decoration: none;  display: inline-block; background-image: linear-gradient(to top, gray, lightgray 25%, lightgrey 75%,white);border: 2px solid #333;box-shadow: 0px 5px 10px #0003;}
         .logo-container { position: relative; display: inline-block; cursor: pointer; }
         .logo-container .hover-text { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
         .logo-container:hover .hover-text { opacity: 1; }
@@ -45,9 +48,9 @@
         .service-card .btn { background: #ff4444; color: #fff; padding: 8px 16px; border-radius: 18px; text-decoration: none; font-size: 14px; font-weight: 500; }
         
         .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin-bottom: 48px; }
-        .stat-card { background: #1e1e1e; padding: 24px; border-radius: 12px; text-align: center; position: relative; }
+        .stat-card {  padding: 24px;  text-align: center; position: relative; }
         .stat-card .number { font-size: 32px; font-weight: 700; color: #ff4444; }
-        .stat-card .label { font-size: 14px; color: #aaa; margin-top: 8px; }
+        .stat-card .label { font-size: 14px; color: #333; margin-top: 8px; }
         .stat-card .actual-number { font-size: 12px; color: #666; margin-top: 4px; opacity: 0; transition: opacity 0.3s; }
         .stat-card:hover .actual-number { opacity: 1; }
         
@@ -56,16 +59,26 @@
         .footer h3 { margin-bottom: 16px; }
         .footer p { color: #aaa; line-height: 1.6; }
         .footer a { color: #ff4444; text-decoration: none; }
+
+        .cta:hover {
+            filter: contrast(1.1);
+        }
+        .thing {
+            background: linear-gradient(to bottom, white 0%, lightgray 10px, lightgray calc(100% - 10px), gray 100%);'
+            border: 2px solid #333;
+            box-shadow: 0px 5px 10px #0003;
+        }
         
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .main-content { margin-left: 0; }
             .header .search { display: none; }
         }
+    
     </style>
 </head>
 <body>
-    <header class="header">
+    <header class="header thing">
         <div class="logo">
             <h1>CRZ.Network</h1>
         </div>
@@ -116,7 +129,7 @@
     </nav>
 
     <main class="main-content">
-        <section class="hero">
+        <section class="hero thing">
             <div class="logo-container" onclick="document.querySelector('object').data = document.querySelector('object').data;">
                 <object data="/animatedlogo.svg" type="image/svg+xml" style="height: 120px; margin-bottom: 24px; pointer-events: none;"></object>
                 <div class="hover-text">Click to replay</div>
@@ -130,19 +143,19 @@
         $stats = api('stats');
         ?>
         <section class="stats">
-            <div class="stat-card">
+            <div class="stat-card thing">
                 <div class="number"><?php echo $stats['videos']; ?></div>
                 <div class="label">Videos Uploaded</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card thing">
                 <div class="number"><?php echo $stats['users']; ?></div>
                 <div class="label">Active Users</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card thing">
                 <div class="number"><?php echo $stats['games']; ?></div>
                 <div class="label">Games Available</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card thing">
                 <div class="number">24/7</div>
                 <div class="label">Community Support</div>
             </div>
