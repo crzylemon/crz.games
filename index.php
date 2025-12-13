@@ -1,82 +1,13 @@
-<?php require_once 'db.php'; ?>
+<?php 
+require_once 'db.php';
+require_once 'user/session.php';
+$user = getCurrentUser();
+?>
 <!DOCTYPE html>
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CRZ.Network</title>
-    <style>
-
-        
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Roboto', 'Arial', sans-serif; background: #aaa; color: #333; }
-        
-        .header { background: #212121; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #303030; }
-        .header .logo { display: flex; align-items: center; }
-        .header .logo img { height: 32px; margin-right: 8px; }
-        .header .logo h1 { font-size: 20px; font-weight: 400; color: #fff; }
-        .header .search { flex: 1; max-width: 640px; margin: 0 40px; display: flex; }
-        .header .search input { flex: 1; padding: 12px 16px; background: #121212; border: 1px solid #303030; border-radius: 2px 0 0 2px; color: #fff; font-size: 16px; }
-        .header .search button { padding: 12px 20px; background: #303030; border: 1px solid #303030; border-left: none; border-radius: 0 2px 2px 0; color: #fff; cursor: pointer; }
-        .header .actions { display: flex; gap: 16px; align-items: center; }
-        /*.header .actions a { color: #fff; text-decoration: none; padding: 8px 16px; border-radius: 18px; background: #ff4444; font-weight: 500; }*/
-        
-        .sidebar { position: fixed; left: 0; top: 73px; width: 240px; height: calc(100vh - 73px); background: linear-gradient(to bottom, white 0%, lightgray 10px, lightgray calc(100% - 10px), gray 100%); padding: 12px 0; overflow-y: auto; border-right: 2px solid #333;}
-        .sidebar .section { margin-bottom: 24px; }
-        .sidebar .section-title { padding: 8px 24px; font-size: 14px; font-weight: 500; text-transform: uppercase; text-shadow: 0px 1px 0px #0003;}
-        .sidebar .menu-item { display: flex; align-items: center; padding: 10px 24px; color: inherit; text-decoration: none; background: linear-gradient(to bottom, white 0%, lightgray 10px, lightgray calc(100% - 10px), gray 100%);text-shadow: 0px 1px 0px #0003;}
-        .sidebar .menu-item:hover { background: linear-gradient(to bottom, lightgray 0%, darkgray 10px, darkgray calc(100% - 10px), gray 100%); }
-        .sidebar .menu-item.active { background: linear-gradient(to bottom, lightgray 0%, darkgray 10px, darkgray calc(100% - 10px), gray 100%); }
-        .sidebar .menu-item span { margin-left: 24px; font-size: 14px; }
-        .sidebar .menu-item img { width: 20px; height: 20px; }
-        
-        .main-content { margin-left: 240px; padding: 24px; }
-        .hero {  padding: 60px 40px; border-radius: 5px; margin-bottom: 32px; text-align: center; border: 2px solid #333;box-shadow: 0px 5px 10px #0003;}
-        .hero h1 { font-size: 48px; font-weight: 700; margin-bottom: 16px; }
-        .thing p { font-size: 18px;  margin-bottom: 32px; text-shadow: 0px 1px 0px #0003;}
-        .thingbutton {  color: #333; padding: 12px 24px; border-radius: 5px; text-decoration: none;  display: inline-block; background-image: linear-gradient(to top, gray, lightgray 25%, lightgrey 75%,white);border: 2px solid #333;box-shadow: 0px 5px 10px #0003;}
-        .logo-container { position: relative; display: inline-block; cursor: pointer; }
-        .logo-container .hover-text { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-        .logo-container:hover .hover-text { opacity: 1; }
-        
-        .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-bottom: 48px; }
-        .service-card { background: #1e1e1e; border-radius: 12px; overflow: hidden; transition: transform 0.2s; }
-        .service-card:hover { transform: translateY(-4px); }
-        .service-card .thumbnail { height: 180px; background: linear-gradient(to bottom, lightgray 0%, darkgray 10px, darkgray calc(100% - 10px), gray 100%); display: flex; align-items: center; justify-content: center; font-size: 48px; }
-        .service-card .content { padding: 16px; }
-        .service-card h3 { font-size: 16px; font-weight: 500; margin-bottom: 8px; }
-        .service-card p { font-size: 14px; margin-bottom: 16px; }
-        .service-card .btn {padding: 8px 16px;text-decoration: none; font-size: 14px; }
-        
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin-bottom: 48px; }
-        .stat-card {  padding: 24px;  text-align: center; position: relative; }
-        .stat-card .number { font-size: 32px; font-weight: 700; color: #ff4444; }
-        .stat-card .label { font-size: 14px; color: #333; margin-top: 8px; }
-        .stat-card .actual-number { font-size: 12px; color: #666; margin-top: 4px; opacity: 0; transition: opacity 0.3s; }
-        .stat-card:hover .actual-number { opacity: 1; }
-        
-        .footer {padding: 48px 0; border-top: 2px solid #333;}
-        .footer-content { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
-        .footer h3 { margin-bottom: 16px; }
-        .footer p {line-height: 1.6; }
-        .footer a { color: #ff4444; text-decoration: none; }
-
-        .thingbutton:hover {
-            filter: contrast(1.1);
-        }
-        .thing {
-            background: linear-gradient(to bottom, white 0%, lightgray 10px, lightgray calc(100% - 10px), gray 100%);
-            border: 2px solid #333;
-            box-shadow: 0px 5px 10px #0003;
-            border-radius: 5px;
-        }
-        
-        @media (max-width: 768px) {
-            .sidebar { display: none; }
-            .main-content { margin-left: 0; }
-            .header .search { display: none; }
-        }
-    
-    </style>
+    <link rel="stylesheet" href="css/index.css">
 </head>
 <body>
     <header class="header thing">
@@ -88,7 +19,18 @@
             <button><img src="default.svg" style="width: 16px; height: 16px;"></button>
         </div>
         <div class="actions">
-            <a class="thingbutton" href="/games/">Sign In</a>
+            <?php if ($user): ?>
+                <div class="user-dropdown">
+                    <button class="user-button thingbutton"><?php echo htmlspecialchars($user['display_name']); ?></button>
+                    <div class="dropdown-content">
+                        <a href="/user/settings.php">Settings</a>
+                        <a href="/user/logout.php">Sign Out</a>
+                    </div>
+                </div>
+            <?php else: ?>
+                <a class="thingbutton" href="/user/login.php">Sign In</a>
+                <a class="thingbutton" href="/user/signup.php">Sign Up</a>
+            <?php endif; ?>
         </div>
     </header>
 
