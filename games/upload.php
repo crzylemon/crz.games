@@ -1,5 +1,7 @@
 <?php
 require_once '../db.php';
+require_once '../user/session.php';
+$user = getCurrentUser();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = $_POST['title'] ?? '';
@@ -16,8 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $current_version = $_POST['current_version'] ?? '0.1.0';
     
     try {
-        $stmt = $pdo->prepare("INSERT INTO games (slug, title, description, genre, owner_user_id, hosting_type, game_url, uses_crengine, is_crengine_mod, status, whitelist_visibility, whitelist_play, current_version) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$slug, $title, $description, $genre, $hosting_type, $game_url, $uses_crengine, $is_crengine_mod, $status, $whitelist_visibility, $whitelist_play, $current_version]);
+        $stmt = $pdo->prepare("INSERT INTO games (slug, title, description, genre, owner_user_id, hosting_type, game_url, uses_crengine, is_crengine_mod, status, whitelist_visibility, whitelist_play, current_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$slug, $title, $description, $genre, $hosting_type, $user['id'], $game_url, $uses_crengine, $is_crengine_mod, $status, $whitelist_visibility, $whitelist_play, $current_version]);
         
         $game_id = $pdo->lastInsertId();
         

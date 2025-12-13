@@ -1,6 +1,7 @@
 <?php
 require_once '../db.php';
-
+require_once '../user/session.php';
+$user = getCurrentUser();
 $slug = $_GET['slug'] ?? '';
 if (empty($slug)) {
     header('Location: /games/');
@@ -59,7 +60,7 @@ try {
             </div>
 
             <div class="game-info">
-                <?php if ($game['status'] === 'PLAYABLE'): ?>
+                <?php if ($game['status'] === 'PLAYABLE' || $user['id'] === 1 || $user['id'] === $game['owner_user_id']): ?>
                     <button class="play-button" onclick="playGame()">Play Now</button>
                 <?php else: ?>
                     <button class="play-button" disabled>Not Available</button>

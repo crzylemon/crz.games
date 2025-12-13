@@ -4,3 +4,7 @@ vid/uploads/
 temp/
 vid/temp/
 games/temp/
+user/session.php
+*.sql
+*.sqlite
+*.sqlite3

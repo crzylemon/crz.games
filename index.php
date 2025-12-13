@@ -150,19 +150,18 @@ $user = getCurrentUser();
                 <div class="content">
                     <h3>CRZ.Videos</h3>
                     <p>Upload, share, and discover amazing videos. Create playlists, add captions, and engage with our growing community.</p>
-                    <a href="/vid/" class="btn thingbutton">Watch Videos</a>
+                    <a href="/vid/" class="btn thingbutton" disabled>Watch Videos</a>
                 </div>
             </div>
         </section>
+        <footer class="footer thing" id="about">
+            <div class="footer-content">
+                <h3>About CRZ Network</h3>
+                <p>CRZ Network is a comprehensive entertainment platform combining gaming, video sharing, and community features. Join thousands of users creating and sharing content every day.</p>
+                <p>All user content on this website is human-made or human-uploaded. All graphics are made by the site's creator (Crzy) using <a href="https://penguinmod.com/">PenguinMod</a>. We have a strict NO-AI policy for user generated content.</p>
+                <p style="margin-top: 20px; opacity: 0.7;">© 2025 CRZ Network. All rights reserved.</p>
+            </div>
+        </footer>
     </main>
-
-    <footer class="footer thing" id="about">
-        <div class="footer-content">
-            <h3>About CRZ Network</h3>
-            <p>CRZ Network is a comprehensive entertainment platform combining gaming, video sharing, and community features. Join thousands of users creating and sharing content every day.</p>
-            <p>All user content on this website is human-made or human-uploaded. All graphics are made by the site's creator (Crzy) using <a href="https://penguinmod.com/">PenguinMod</a>. We have a strict NO-AI policy for user generated content.</p>
-            <p style="margin-top: 20px; opacity: 0.7;">© 2025 CRZ Network. All rights reserved.</p>
-        </div>
-    </footer>
 </body>
 </html>

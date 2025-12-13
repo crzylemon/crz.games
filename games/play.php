@@ -1,6 +1,12 @@
 <?php
 require_once '../db.php';
+// show errors if something happens
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
+require_once '../user/session.php';
+$user = getCurrentUser();
 $slug = $_GET['slug'] ?? '';
 if (empty($slug)) {
     header('Location: /games/');
@@ -8,13 +14,20 @@ if (empty($slug)) {
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT * FROM games WHERE slug = ? AND status = 'PLAYABLE'");
+    $stmt = $pdo->prepare("SELECT * FROM games WHERE slug = ?");
     $stmt->execute([$slug]);
     $game = $stmt->fetch();
     
     if (!$game) {
         header('HTTP/1.0 404 Not Found');
-        echo "Game not found or not playable";
+        echo "Game not found";
+        exit;
+    }
+    //$game['status'] === 'PLAYABLE' || $user['id'] === 1 || $user['id'] === $game['owner_user_id']
+    // if this does not match, error with "No access"
+    if (!($game['status'] === 'PLAYABLE' || $user['id'] === 1 || $user['id'] === $game['owner_user_id'])) {
+        header('HTTP/1.0 403 Forbidden');
+        echo "Game is not playable";
         exit;
     }
     
