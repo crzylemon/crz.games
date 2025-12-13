@@ -17,23 +17,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
     
-    if (empty($username) || empty($display_name) || empty($email) || empty($password)) {
-        $error = 'Please fill in all fields';
+    if (empty($username) || empty($display_name) || empty($password)) {
+        $error = 'Please fill in all required fields';
     } elseif ($password !== $confirm_password) {
         $error = 'Passwords do not match';
     } elseif (strlen($password) < 6) {
         $error = 'Password must be at least 6 characters';
     } else {
-        $stmt = $pdo->prepare("SELECT id FROM accounts WHERE username = ? OR email = ?");
-        $stmt->execute([$username, $email]);
+        $checkQuery = "SELECT id FROM accounts WHERE username = ?";
+        $checkParams = [$username];
+        
+        if (!empty($email)) {
+            $checkQuery .= " OR email = ?";
+            $checkParams[] = $email;
+        }
+        
+        $stmt = $pdo->prepare($checkQuery);
+        $stmt->execute($checkParams);
         
         if ($stmt->fetch()) {
-            $error = 'Username or email already exists';
+            $error = !empty($email) ? 'Username or email already exists' : 'Username already exists';
         } else {
             $password_hash = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("INSERT INTO accounts (username, display_name, email, password_hash) VALUES (?, ?, ?, ?)");
             
-            if ($stmt->execute([$username, $display_name, $email, $password_hash])) {
+            if ($stmt->execute([$username, $display_name, $email ?: null, $password_hash])) {
                 $success = 'Account created successfully! You can now sign in.';
             } else {
                 $error = 'Failed to create account';
@@ -85,8 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     
                     <div class="info-section">
-                        <label class="info-title" for="email">Email</label>
-                        <input type="email" id="email" name="email" required
+                        <label class="info-title" for="email">Email (optional)</label>
+                        <input type="email" id="email" name="email"
                                style="width: 100%; padding: 12px; background: #2a2a2a; border: 1px solid #404040; border-radius: 4px; color: #fff; font-size: 16px;">
                     </div>
                     

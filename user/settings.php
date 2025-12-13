@@ -12,14 +12,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $current_password = $_POST['current_password'] ?? '';
     $new_password = $_POST['new_password'] ?? '';
     
-    if (empty($display_name) || empty($email)) {
-        $error = 'Display name and email are required';
+    if (empty($display_name)) {
+        $error = 'Display name is required';
     } else {
-        $stmt = $pdo->prepare("SELECT id FROM accounts WHERE email = ? AND id != ?");
-        $stmt->execute([$email, $user['id']]);
+        if (!empty($email)) {
+            $stmt = $pdo->prepare("SELECT id FROM accounts WHERE email = ? AND id != ?");
+            $stmt->execute([$email, $user['id']]);
+            
+            if ($stmt->fetch()) {
+                $error = 'Email already in use by another account';
+            }
+        }
         
-        if ($stmt->fetch()) {
-            $error = 'Email already in use by another account';
+        if (!$error) {
         } else {
             if (!empty($new_password)) {
                 if (empty($current_password) || !password_verify($current_password, $user['password_hash'])) {
@@ -29,12 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $password_hash = password_hash($new_password, PASSWORD_DEFAULT);
                     $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, email = ?, password_hash = ? WHERE id = ?");
-                    $stmt->execute([$display_name, $email, $password_hash, $user['id']]);
+                    $stmt->execute([$display_name, $email ?: null, $password_hash, $user['id']]);
                     $success = 'Settings updated successfully';
                 }
             } else {
                 $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, email = ? WHERE id = ?");
-                $stmt->execute([$display_name, $email, $user['id']]);
+                $stmt->execute([$display_name, $email ?: null, $user['id']]);
                 $success = 'Settings updated successfully';
             }
             
@@ -89,9 +94,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     
                     <div class="info-section">
-                        <label class="info-title" for="email">Email</label>
-                        <input type="email" id="email" name="email" required 
-                               value="<?php echo htmlspecialchars($user['email']); ?>"
+                        <label class="info-title" for="email">Email (optional)</label>
+                        <input type="email" id="email" name="email" 
+                               value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>"
                                style="width: 100%; padding: 12px; background: #2a2a2a; border: 1px solid #404040; border-radius: 4px; color: #fff; font-size: 16px;">
                     </div>
                     
