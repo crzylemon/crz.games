@@ -1,10 +1,23 @@
 <?php
-require_once 'session.php';
-require_once '../db.php';
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
-if (isLoggedIn()) {
-    header('Location: /');
-    exit();
+try {
+    require_once 'session.php';
+    require_once '../db.php';
+} catch (Exception $e) {
+    die('Error loading dependencies: ' . $e->getMessage());
+}
+
+try {
+    if (isLoggedIn()) {
+        header('Location: /');
+        exit();
+    }
+} catch (Exception $e) {
+    // Continue with signup if session check fails
+    error_log('Session check failed: ' . $e->getMessage());
 }
 
 $error = '';
@@ -24,28 +37,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (strlen($password) < 6) {
         $error = 'Password must be at least 6 characters';
     } else {
-        $checkQuery = "SELECT id FROM accounts WHERE username = ?";
-        $checkParams = [$username];
-        
-        if (!empty($email)) {
-            $checkQuery .= " OR email = ?";
-            $checkParams[] = $email;
-        }
-        
-        $stmt = $pdo->prepare($checkQuery);
-        $stmt->execute($checkParams);
-        
-        if ($stmt->fetch()) {
-            $error = !empty($email) ? 'Username or email already exists' : 'Username already exists';
-        } else {
-            $password_hash = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("INSERT INTO accounts (username, display_name, email, password_hash) VALUES (?, ?, ?, ?)");
+        try {
+            $checkQuery = "SELECT id FROM accounts WHERE username = ?";
+            $checkParams = [$username];
             
-            if ($stmt->execute([$username, $display_name, $email ?: null, $password_hash])) {
-                $success = 'Account created successfully! You can now sign in.';
-            } else {
-                $error = 'Failed to create account';
+            if (!empty($email)) {
+                $checkQuery .= " OR email = ?";
+                $checkParams[] = $email;
             }
+            
+            $stmt = $pdo->prepare($checkQuery);
+            $stmt->execute($checkParams);
+            
+            if ($stmt->fetch()) {
+                $error = !empty($email) ? 'Username or email already exists' : 'Username already exists';
+            } else {
+                $password_hash = password_hash($password, PASSWORD_DEFAULT);
+                $stmt = $pdo->prepare("INSERT INTO accounts (username, display_name, email, password_hash) VALUES (?, ?, ?, ?)");
+                
+                if ($stmt->execute([$username, $display_name, $email ?: '', $password_hash])) {
+                    $success = 'Account created successfully! You can now sign in.';
+                } else {
+                    $error = 'Failed to create account';
+                }
+            }
+        } catch (Exception $e) {
+            $error = 'Database error: ' . $e->getMessage();
         }
     }
 }

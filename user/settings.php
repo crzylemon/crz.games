@@ -34,12 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $password_hash = password_hash($new_password, PASSWORD_DEFAULT);
                     $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, email = ?, password_hash = ? WHERE id = ?");
-                    $stmt->execute([$display_name, $email ?: null, $password_hash, $user['id']]);
+                    $stmt->execute([$display_name, $email ?: '', $password_hash, $user['id']]);
                     $success = 'Settings updated successfully';
                 }
             } else {
                 $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, email = ? WHERE id = ?");
-                $stmt->execute([$display_name, $email ?: null, $user['id']]);
+                $stmt->execute([$display_name, $email ?: '', $user['id']]);
                 $success = 'Settings updated successfully';
             }
             
