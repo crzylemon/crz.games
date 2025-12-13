@@ -26,7 +26,11 @@ try {
     die("Error: " . $e->getMessage());
 }
 
-$gameUrl = $game['hosting_type'] === 'URL' ? $game['game_url'] : "/games/uploads/games/{$game['slug']}/{$game['entry_file']}";
+if ($game['uses_crengine']) {
+    $gameUrl = "/games/crengine.html?slug={$game['slug']}";
+} else {
+    $gameUrl = $game['hosting_type'] === 'URL' ? $game['game_url'] : "/games/uploads/games/{$game['slug']}/{$game['entry_file']}";
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
