@@ -27,7 +27,7 @@ try {
 }
 
 if ($game['uses_crengine']) {
-    $gameUrl = "/games/crengine.html?slug={$game['slug']}";
+    $gameUrl = "/games/crengine.html?game={$game['id']}";
 } else {
     $gameUrl = $game['hosting_type'] === 'URL' ? $game['game_url'] : "/games/uploads/games/{$game['slug']}/{$game['entry_file']}";
 }
@@ -64,6 +64,20 @@ if ($game['uses_crengine']) {
     <div class="loading" id="loading">
         <h2>Loading <?= htmlspecialchars($game['title']) ?>...</h2>
     </div>
-    <iframe src="<?= htmlspecialchars($gameUrl) ?>" class="game-frame" onload="document.getElementById('loading').style.display='none'"></iframe>
+    <iframe src="<?= htmlspecialchars($gameUrl) ?>" class="game-frame" onload="document.getElementById('loading').style.display='none'; autoScale()"></iframe>
+    <script>
+        function autoScale() {
+            const iframe = document.querySelector('.game-frame');
+            const canvas = iframe.contentDocument?.querySelector('canvas');
+            if (canvas) {
+                const scaleX = window.innerWidth / canvas.width;
+                const scaleY = window.innerHeight / canvas.height;
+                const scale = Math.min(scaleX, scaleY);
+                canvas.style.transform = `scale(${scale})`;
+                canvas.style.transformOrigin = 'top left';
+            }
+        }
+        window.addEventListener('resize', autoScale);
+    </script>
 </body>
 </html>

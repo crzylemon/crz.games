@@ -5,9 +5,9 @@
 }
 
 body {
-    background: linear-gradient(135deg, #1b2838 0%, #2a475e 100%);
-    color: #c7d5e0;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(to bottom, #3d3f46 0%, #373844 100%);
+    color: #eff3ff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, Arial;
     min-height: 100vh;
 }
 
@@ -18,7 +18,7 @@ body {
 }
 
 .game-header {
-    background: linear-gradient(90deg, #171a21 0%, #1b2838 100%);
+    background: #0000007F;
     border-radius: 8px;
     padding: 30px;
     margin-bottom: 20px;
@@ -65,7 +65,7 @@ body {
 }
 
 .game-media {
-    background: #1e2329;
+    background: #0000007F;
     border-radius: 8px;
     padding: 20px;
 }
@@ -94,7 +94,7 @@ body {
 }
 
 .game-info {
-    background: #1e2329;
+    background: #0000007F;
     border-radius: 8px;
     padding: 20px;
 }
@@ -147,7 +147,7 @@ body {
 }
 
 .stat-item {
-    background: #16202d;
+    background: #0000007F;
     padding: 15px;
     border-radius: 6px;
     text-align: center;
@@ -166,7 +166,7 @@ body {
 }
 
 .game-description {
-    background: #1e2329;
+    background: #0000007F;
     border-radius: 8px;
     padding: 20px;
     margin-top: 20px;
