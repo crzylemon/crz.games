@@ -42,7 +42,7 @@ if ($game['uses_crengine']) {
         body {
             margin: 0;
             padding: 0;
-            background: #1b2838;
+            background: #000000ff;
             color: white;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }

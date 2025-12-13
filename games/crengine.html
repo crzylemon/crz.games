@@ -204,6 +204,14 @@ class CRE {
                     .then(data => this.LoadMap(data))
                     .catch(() => this.addToConsole(`Failed to load map: ${args[0]}`));
                 break;
+            case "width":
+                if (args[0]) this.width = parseInt(args[0]);
+                this.addToConsole(`Width = ${this.width}`);
+                break;
+            case "height":
+                if (args[0]) this.height = parseInt(args[0]);
+                this.addToConsole(`Height = ${this.height}`);
+                break;
             default:
                 this.addToConsole(`Unknown command: ${command}`);
         }
