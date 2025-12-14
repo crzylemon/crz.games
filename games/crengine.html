@@ -102,7 +102,7 @@ class CRE {
             position: new Vector(0, 0, -10),
             rotation: new Vector(0, 0, 0),
             fov: 60,
-            near: 0.1,
+            near: 0.01,
             far: 1000
         };
 
@@ -393,7 +393,7 @@ class CRE {
         const outside = [];
 
         verts.forEach(v => {
-            if (v.z > near) inside.push(v);
+            if (v.z >= near) inside.push(v);
             else outside.push(v);
         });
 
@@ -409,15 +409,8 @@ class CRE {
             const o1 = outside[0];
             const o2 = outside[1];
 
-            const denom1 = o1.z - i.z;
-            const denom2 = o2.z - i.z;
-            
-            if (Math.abs(denom1) < 0.0001 || Math.abs(denom2) < 0.0001) return [];
-
-            const t1 = (near - i.z) / denom1;
-            const t2 = (near - i.z) / denom2;
-
-            if (t1 < 0 || t1 > 1 || t2 < 0 || t2 > 1) return [];
+            const t1 = (near - i.z) / (o1.z - i.z);
+            const t2 = (near - i.z) / (o2.z - i.z);
 
             return [[
                 i,
@@ -431,15 +424,8 @@ class CRE {
             const [i1, i2] = inside;
             const o = outside[0];
 
-            const denom1 = o.z - i1.z;
-            const denom2 = o.z - i2.z;
-            
-            if (Math.abs(denom1) < 0.0001 || Math.abs(denom2) < 0.0001) return [[i1, i2, { x: (i1.x + i2.x) / 2, y: (i1.y + i2.y) / 2, z: near }]];
-
-            const t1 = (near - i1.z) / denom1;
-            const t2 = (near - i2.z) / denom2;
-
-            if (t1 < 0 || t1 > 1 || t2 < 0 || t2 > 1) return [[i1, i2, { x: (i1.x + i2.x) / 2, y: (i1.y + i2.y) / 2, z: near }]];
+            const t1 = (near - i1.z) / (o.z - i1.z);
+            const t2 = (near - i2.z) / (o.z - i2.z);
 
             const v1 = { x: i1.x + t1 * (o.x - i1.x), y: i1.y + t1 * (o.y - i1.y), z: near };
             const v2 = { x: i2.x + t2 * (o.x - i2.x), y: i2.y + t2 * (o.y - i2.y), z: near };
@@ -562,47 +548,61 @@ class CRE {
             this.rotateVertex(pos.add(vertex), rotation, pos)
         );
         
-        // Create faces with correct winding order (counter-clockwise)
+        // Create faces with z-depth for sorting
         const faces = [
-            {verts: [v[0],v[3],v[2]], shade: 0.6}, {verts: [v[0],v[2],v[1]], shade: 0.6}, // back
-            {verts: [v[4],v[5],v[6]], shade: 1.0}, {verts: [v[4],v[6],v[7]], shade: 1.0}, // front
-            {verts: [v[0],v[1],v[5]], shade: 0.4}, {verts: [v[0],v[5],v[4]], shade: 0.4}, // bottom
-            {verts: [v[2],v[3],v[7]], shade: 0.9}, {verts: [v[2],v[7],v[6]], shade: 0.9}, // top
-            {verts: [v[0],v[4],v[7]], shade: 0.7}, {verts: [v[0],v[7],v[3]], shade: 0.7}, // left
-            {verts: [v[1],v[2],v[6]], shade: 0.8}, {verts: [v[1],v[6],v[5]], shade: 0.8}  // right
+            {verts: [v[0],v[1],v[2]], shade: 0.6}, {verts: [v[0],v[2],v[3]], shade: 0.6}, // back
+            {verts: [v[4],v[7],v[6]], shade: 1.0}, {verts: [v[4],v[6],v[5]], shade: 1.0}, // front
+            {verts: [v[0],v[4],v[5]], shade: 0.4}, {verts: [v[0],v[5],v[1]], shade: 0.4}, // bottom
+            {verts: [v[2],v[6],v[7]], shade: 0.9}, {verts: [v[2],v[7],v[3]], shade: 0.9}, // top
+            {verts: [v[0],v[3],v[7]], shade: 0.7}, {verts: [v[0],v[7],v[4]], shade: 0.7}, // left
+            {verts: [v[1],v[5],v[6]], shade: 0.8}, {verts: [v[1],v[6],v[2]], shade: 0.8}  // right
         ];
         
         // Calculate camera-space Z depth for each face and add to render queue
         faces.forEach(({verts: [a,b,c], shade}) => {
-            const ca = this.toCameraSpace(a);
-            const cb = this.toCameraSpace(b);
-            const cc = this.toCameraSpace(c);
+            // Use the same transformation as project3D for consistent depth
+            const p1 = this.project3D(a);
+            const p2 = this.project3D(b);
+            const p3 = this.project3D(c);
+            if (p1 && p2 && p3) {
+                // Backface culling - check if triangle faces away from camera
+                const ca = this.toCameraSpace(a);
+                const cb = this.toCameraSpace(b);
+                const cc = this.toCameraSpace(c);
 
-            const abx = cb.x - ca.x;
-            const aby = cb.y - ca.y;
-            const abz = cb.z - ca.z;
-            const acx = cc.x - ca.x;
-            const acy = cc.y - ca.y;
-            const acz = cc.z - ca.z;
+                const abx = cb.x - ca.x;
+                const aby = cb.y - ca.y;
+                const abz = cb.z - ca.z;
+                const acx = cc.x - ca.x;
+                const acy = cc.y - ca.y;
+                const acz = cc.z - ca.z;
 
-            const normalX = aby * acz - abz * acy;
-            const normalY = abz * acx - abx * acz;
-            const normalZ = abx * acy - aby * acx;
-            
-            const dot = normalZ;
-            
-            if (dot < 0) {
-                const minZ = Math.min(ca.z, cb.z, cc.z);
-                const maxZ = Math.max(ca.z, cb.z, cc.z);
+                // Calculate proper cross product for normal
+                const normalX = aby * acz - abz * acy;
+                const normalY = abz * acx - abx * acz;
+                const normalZ = abx * acy - aby * acx;
+                
+                // Dot product with view direction (0,0,1 in camera space)
+                const dot = normalZ;
+                
+                // Only render front-facing triangles
+                if (dot > 0) {
+                    const ca = this.toCameraSpace(a);
+                    const cb = this.toCameraSpace(b);
+                    const cc = this.toCameraSpace(c);
 
-                this.renderQueue.push({
-                    type: 'triangle',
-                    verts: [a, b, c],
-                    color: "#888888",
-                    shade,
-                    minZ,
-                    maxZ
-                });
+                    const minZ = Math.min(ca.z, cb.z, cc.z);
+                    const maxZ = Math.max(ca.z, cb.z, cc.z);
+
+                    this.renderQueue.push({
+                        type: 'triangle',
+                        verts: [a, b, c],
+                        color: "#888888",
+                        shade,
+                        minZ,
+                        maxZ
+                    });
+                }
             }
         });
     }
