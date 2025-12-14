@@ -1,7 +1,12 @@
 <?php
 require_once '../db.php';
 require_once '../user/session.php';
+
 $user = getCurrentUser();
+if (!$user) {
+    header('Location: ../user/login.php');
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = $_POST['title'] ?? '';
@@ -141,6 +146,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="game-header">
             <h1 class="game-title">Upload New Game</h1>
             <div class="game-genre">Share your game with the community</div>
+            <div style="margin-top: 15px;">
+                <a href="dashboard.php" style="color: #66c0f4; text-decoration: none;">← Back to My Games</a>
+            </div>
         </div>
 
         <div class="upload-form">

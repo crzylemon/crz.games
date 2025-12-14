@@ -9,7 +9,7 @@ if (empty($slug)) {
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT * FROM games WHERE slug = ?");
+    $stmt = $pdo->prepare("SELECT g.*, a.username FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.slug = ?");
     $stmt->execute([$slug]);
     $game = $stmt->fetch();
     
@@ -60,7 +60,7 @@ try {
             </div>
 
             <div class="game-info">
-                <?php if ($game['status'] === 'PLAYABLE' || $user['id'] === 1 || $user['id'] === $game['owner_user_id']): ?>
+                <?php if ($game['status'] === 'PLAYABLE' || ($user && ($user['id'] === 1 || $user['id'] === $game['owner_user_id']))): ?>
                     <button class="play-button" onclick="playGame()">Play Now</button>
                 <?php else: ?>
                     <button class="play-button" disabled>Not Available</button>
@@ -73,7 +73,7 @@ try {
 
                 <div class="info-section">
                     <div class="info-title">Developer</div>
-                    <div class="info-value">User #<?= htmlspecialchars($game['owner_user_id']) ?></div>
+                    <div class="info-value"><a href="profile.php?user=<?= urlencode($game['username']) ?>" style="color: #66c0f4; text-decoration: none;"><?= htmlspecialchars($game['username']) ?></a></div>
                 </div>
 
                 <div class="info-section">
