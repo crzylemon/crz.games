@@ -130,7 +130,8 @@ $current_user = getCurrentUser();
                 <?= strtoupper(substr($profile_user['username'], 0, 1)) ?>
             </div>
             <div class="profile-info">
-                <h1><?= htmlspecialchars($profile_user['username']) ?></h1>
+                <h1><?= htmlspecialchars($profile_user['display_name'] ?: $profile_user['username']) ?></h1>
+                <p style="color: #8f98a0; margin: 5px 0;">@<?= htmlspecialchars($profile_user['username']) ?></p>
                 <p>Member since <?= date('F Y', strtotime($profile_user['created_at'])) ?></p>
                 <div class="profile-stats">
                     <div class="stat">
@@ -146,12 +147,12 @@ $current_user = getCurrentUser();
         </div>
 
         <div class="games-section">
-            <h2><?= htmlspecialchars($profile_user['username']) ?>'s Games</h2>
+            <h2><?= htmlspecialchars($profile_user['display_name'] ?: $profile_user['username']) ?>'s Games</h2>
             
             <?php if (empty($user_games)): ?>
                 <div class="no-games">
                     <h3>No games yet</h3>
-                    <p><?= htmlspecialchars($profile_user['username']) ?> hasn't published any games yet.</p>
+                    <p><?= htmlspecialchars($profile_user['display_name'] ?: $profile_user['username']) ?> hasn't published any games yet.</p>
                 </div>
             <?php else: ?>
                 <div class="games-grid">
