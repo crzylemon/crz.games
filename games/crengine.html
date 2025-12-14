@@ -87,7 +87,7 @@ class CRE {
         this.conVars = {};
         this.keyBinds = {};
         this.game = game;
-        
+        this.debug = false;
         // Load binds from localStorage
         this.loadBinds();
         this._width = 1280;
@@ -246,6 +246,12 @@ class CRE {
                     });
                 }
                 break;
+            case "toggledebug":
+                this.debug = !this.debug;
+                break;
+            case "toggleconsole":
+                this.toggleConsole();
+                break;
             default:
                 this.addToConsole(`Unknown command: ${command}`);
         }
@@ -340,7 +346,7 @@ class CRE {
     }
     
     // Auto-load map function for game code
-    LoadMa(mapName) {
+    LoadMap(mapName) {
         fetch(`uploads/games/${this.game}/maps/${mapName}.map?v=${Date.now()}`)
             .then(r => r.json())
             .then(data => {
@@ -368,6 +374,15 @@ class CRE {
             }
         }
     }
+    
+    // Set default bind if not already set
+    setDefaultBind(key, command) {
+        const k = key.toLowerCase();
+        if (!this.keyBinds[k]) {
+            this.keyBinds[k] = command;
+            this.saveBinds();
+        }
+    }
 
     // Utility functions
     Msg(text) { 
@@ -379,21 +394,23 @@ class CRE {
     
     // Simple GUI system
     drawGUI() {
-        this.ctx.fillStyle = "white";
-        this.ctx.font = "12px monospace";
-        this.ctx.fillText(`Entities: ${this.entities.length}`, 10, 20);
+        if (this.debug) {
+            this.ctx.fillStyle = "white";
+            this.ctx.font = "12px monospace";
+            this.ctx.fillText(`Entities: ${this.entities.length}`, 10, 20);
         
-        // Calculate FPS with proper bounds
-        const frameTime = performance.now() - this.lastTime;
-        const fps = frameTime > 0 ? Math.min(Math.round(1000 / frameTime), 999) : 0;
-        const addplus = fps === 999 ? "+" : "";
-        this.ctx.fillText(`FPS: ${fps}${addplus}`, 10, 35);
+            // Calculate FPS with proper bounds
+            const frameTime = performance.now() - this.lastTime;
+            const fps = frameTime > 0 ? Math.min(Math.round(1000 / frameTime), 999) : 0;
+            const addplus = fps === 999 ? "+" : "";
+            this.ctx.fillText(`FPS: ${fps}${addplus}`, 10, 35);
         
-        if (this.camera.position) {
-            this.ctx.fillText(`Pos: ${this.camera.position.x.toFixed(1)}, ${this.camera.position.y.toFixed(1)}, ${this.camera.position.z.toFixed(1)}`, 10, 50);
-        }
-        if (this.camera.rotation) {
-            this.ctx.fillText(`Rot: ${this.camera.rotation.x.toFixed(1)}, ${this.camera.rotation.y.toFixed(1)}, ${this.camera.rotation.z.toFixed(1)}`, 10, 65);
+            if (this.camera.position) {
+                this.ctx.fillText(`Pos: ${this.camera.position.x.toFixed(1)}, ${this.camera.position.y.toFixed(1)}, ${this.camera.position.z.toFixed(1)}`, 10, 50);
+            }
+            if (this.camera.rotation) {
+                this.ctx.fillText(`Rot: ${this.camera.rotation.x.toFixed(1)}, ${this.camera.rotation.y.toFixed(1)}, ${this.camera.rotation.z.toFixed(1)}`, 10, 65);
+            }
         }
     }
 
@@ -954,7 +971,7 @@ let selectedSuggestionIndex = 0;
 consoleInput.addEventListener('input', e => {
     const input = e.target.value;
     if (input.length > 0) {
-        const allCommands = [...Object.keys(cre.conCommands), ...Object.keys(cre.conVars), 'ent_spawn', 'game_reset', 'ent_remove', 'clear', 'map_load'];
+        const allCommands = [...Object.keys(cre.conCommands), ...Object.keys(cre.conVars), 'ent_spawn', 'game_reset', 'ent_remove', 'clear', 'map_load', 'width', 'height', 'bind', 'unbind', 'bindlist', 'toggledebug'];
         const matches = allCommands.filter(cmd => cmd.startsWith(input)).slice(0, 5);
         
         if (matches.length > 0) {
@@ -1001,11 +1018,6 @@ consoleInput.addEventListener('keydown', e => {
             suggestions.style.display = 'none';
             selectedSuggestionIndex = 0;
         }
-    } else if (e.key === '`') {
-        e.preventDefault();
-        cre.toggleConsole();
-     } else if (e.key === 'Escape') {
-        suggestions.style.display = 'none';
     }
 });
 

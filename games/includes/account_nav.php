@@ -5,7 +5,7 @@ $current_user = getCurrentUser();
 <div class="account-nav">
     <?php if ($current_user): ?>
         <div class="user-menu">
-            <span class="username">Welcome, <?= htmlspecialchars($current_user['username']) ?></span>
+            <span class="username">Welcome, <?= htmlspecialchars($current_user['display_name'] ?: $current_user['username']) ?></span>
             <div class="nav-links">
                 <a href="/games/dashboard.php" class="nav-link">My Games</a>
                 <a href="/games/upload.php" class="nav-link">Upload</a>

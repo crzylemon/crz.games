@@ -3,7 +3,7 @@ require_once '../db.php';
 require_once '../user/session.php';
 
 try {
-    $stmt = $pdo->prepare("SELECT g.*, a.username FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.status IN ('PLAYABLE', 'PUBLIC_UNPLAYABLE') ORDER BY g.created_at DESC");
+    $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.status IN ('PLAYABLE', 'PUBLIC_UNPLAYABLE') ORDER BY g.created_at DESC");
     $stmt->execute();
     $games = $stmt->fetchAll();
 } catch (PDOException $e) {
@@ -129,7 +129,7 @@ $mapStatusToLabel = [
                     <?php endif; ?>
                     <div class="game-card-content">
                         <div class="game-card-title"><?= htmlspecialchars($game['title']) ?></div>
-                        <div class="game-card-author">by <a href="profile.php?user=<?= urlencode($game['username']) ?>"><?= htmlspecialchars($game['username']) ?></a></div>
+                        <div class="game-card-author">by <a href="profile.php?user=<?= urlencode($game['username']) ?>"><?= htmlspecialchars($game['display_name'] ?: $game['username']) ?></a></div>
                         <?php if ($game['genre']): ?>
                             <div class="game-card-genre"><?= htmlspecialchars($game['genre']) ?></div>
                         <?php endif; ?>

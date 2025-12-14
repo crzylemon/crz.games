@@ -52,7 +52,7 @@ body {
     color: #beee11;
 }
 
-.status-draft {
+.status-draft, .status-whitelisted, .status-public_unplayable {
     background: #8f8f8f;
     color: #ffffff;
 }

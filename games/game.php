@@ -9,7 +9,7 @@ if (empty($slug)) {
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT g.*, a.username FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.slug = ?");
+    $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.slug = ?");
     $stmt->execute([$slug]);
     $game = $stmt->fetch();
     
@@ -73,7 +73,7 @@ try {
 
                 <div class="info-section">
                     <div class="info-title">Developer</div>
-                    <div class="info-value"><a href="profile.php?user=<?= urlencode($game['username']) ?>" style="color: #66c0f4; text-decoration: none;"><?= htmlspecialchars($game['username']) ?></a></div>
+                    <div class="info-value"><a href="profile.php?user=<?= urlencode($game['username']) ?>" style="color: #66c0f4; text-decoration: none;"><?= htmlspecialchars($game['display_name'] ?: $game['username']) ?></a></div>
                 </div>
 
                 <div class="info-section">

@@ -63,6 +63,10 @@ if ($game['uses_crengine']) {
             width: 100vw;
             height: 100vh;
             border: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
         .loading {
             position: fixed;
@@ -215,27 +219,79 @@ if ($game['uses_crengine']) {
                 <p><strong>Shift+Tab:</strong> Toggle overlay</p>
                 <p><strong>Drag:</strong> Move windows by their title bar</p>
                 <p><strong>ESC:</strong> Close overlay</p>
+            </div>
+        </div>
+
+        <div class="window" id="help" style="top: 150px; left: 500px;">
+            <div class="window-header">
+                <span class="window-title">Game</span>
+                <button class="window-close" onclick="closeWindow('help')">×</button>
+            </div>
+            <div class="window-content">
+                <h3>Game</h3>
+                <p><?= htmlspecialchars($game['title']) ?></p>
+                <!-- if created with crengine, show that it is, otherwise show "Not created with crengine" -->
+                <?php if ($game['uses_crengine']): ?>
+                <p>This game was created using CRENGINE.</p>
+                <?php else: ?>
+                <p>This game was not created using CRENGINE.</p>
+                <?php endif; ?>
+                <!-- if created with crengine, show the keybinds and concommands/convars -->
+                <?php if ($game['uses_crengine']): ?>
+                <h3>CRENGINE Keybinds</h3>
+                <ul>
+                    <li><strong>F1:</strong> Toggle Debug Info</li>
+                    <li><strong>`:</strong> Toggle Console</li>
+                </ul>
+                <h3>CRENGINE Console Commands</h3>
+                <ul>
+                    <li><strong>godmode:</strong> Toggle God Mode</li>
+                    <li><strong>noclip:</strong> Toggle No Clipping Mode</li>
+                    <li><strong>set_fov [value]:</strong> Set Field of View</li>
+                </ul>
+                <?php endif; ?>
                 <h3>Support</h3>
                 <p>Having issues? Contact support or check the game's page for more information.</p>
             </div>
         </div>
+
+        
     </div>
     <script>
         function autoScale() {
             if (!document.getElementById('autoScale').checked) return;
             const iframe = document.querySelector('.game-frame');
-            const rect = iframe.getBoundingClientRect();
-            const scaleX = window.innerWidth / rect.width;
-            const scaleY = window.innerHeight / rect.height;
-            const scale = Math.min(scaleX, scaleY) * 0.95;
-            iframe.style.transform = `scale(${scale})`;
-            iframe.style.transformOrigin = 'top left';
+            
+            // Try to get content dimensions for same-origin
+            try {
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+                const body = doc.body;
+                if (body && body.scrollWidth > 0 && body.scrollHeight > 0) {
+                    iframe.style.width = body.scrollWidth + 'px';
+                    iframe.style.height = body.scrollHeight + 'px';
+                    const scaleX = window.innerWidth / body.scrollWidth;
+                    const scaleY = window.innerHeight / body.scrollHeight;
+                    const scale = Math.min(scaleX, scaleY);
+                    iframe.style.transform = `translate(-50%, -50%) scale(${scale})`;
+                    return;
+                }
+            } catch (e) {}
+            
+            // External source: use common game dimensions
+            const gameWidth = 800;
+            const gameHeight = 600;
+            iframe.style.width = gameWidth + 'px';
+            iframe.style.height = gameHeight + 'px';
+            const scaleX = window.innerWidth / gameWidth;
+            const scaleY = window.innerHeight / gameHeight;
+            const scale = Math.min(scaleX, scaleY);
+            iframe.style.transform = `translate(-50%, -50%) scale(${scale})`;
         }
         window.addEventListener('resize', autoScale);
         
         // Overlay toggle
         document.addEventListener('keydown', function(e) {
-            if (e.shiftKey && e.key === 'Tab') {
+            if (e.shiftKey && e.code === 'Tab') {
                 e.preventDefault();
                 toggleOverlay();
             }
@@ -310,47 +366,6 @@ if ($game['uses_crengine']) {
                 document.querySelector('.game-frame').style.transform = 'none';
                 window.removeEventListener('resize', autoScale);
             }
-        });
-        
-        function openWindow(windowId) {
-            document.getElementById(windowId).style.display = 'block';
-        }
-        
-        function closeWindow(windowId) {
-            document.getElementById(windowId).style.display = 'none';
-        }
-        
-        // Make windows draggable
-        let draggedWindow = null;
-        let dragOffset = { x: 0, y: 0 };
-        
-        document.addEventListener('mousedown', function(e) {
-            if (e.target.classList.contains('window-header') || e.target.parentElement.classList.contains('window-header')) {
-                draggedWindow = e.target.closest('.window');
-                const rect = draggedWindow.getBoundingClientRect();
-                dragOffset.x = e.clientX - rect.left;
-                dragOffset.y = e.clientY - rect.top;
-                draggedWindow.style.zIndex = 1001;
-            }
-        });
-        
-        document.addEventListener('mousemove', function(e) {
-            if (draggedWindow) {
-                draggedWindow.style.left = (e.clientX - dragOffset.x) + 'px';
-                draggedWindow.style.top = (e.clientY - dragOffset.y) + 'px';
-            }
-        });
-        
-        document.addEventListener('mouseup', function() {
-            if (draggedWindow) {
-                draggedWindow.style.zIndex = 'auto';
-                draggedWindow = null;
-            }
-        });
-        
-        // Settings functionality
-        document.getElementById('volume').addEventListener('input', function() {
-            document.getElementById('volumeValue').textContent = this.value;
         });
     </script>
 </body>
