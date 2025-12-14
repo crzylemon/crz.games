@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <title>CRENGINE</title>
 <style>
-    body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; }
+    html {width:fit-content; height:fit-content;}
+    body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; width: fit-content; height: fit-content; }
     canvas { display: block; background: #222; }
     #console {
         position: absolute;
@@ -53,13 +54,6 @@
     #console-input::before {
         content: "] ";
     }
-    #gamecontainer {
-        width: 800px;
-        height: 600px;
-        position: relative;
-        margin: 0 auto;
-        border: 1px solid #333;
-    }
     #gameCanvas {
         width: 100%;
         height: 100%;
@@ -91,9 +85,13 @@ class CRE {
         this.Transform = Transform;
         this.conCommands = {};
         this.conVars = {};
+        this.keyBinds = {};
         this.game = game;
-        this._width = canvas.width;
-        this._height = canvas.height;
+        
+        // Load binds from localStorage
+        this.loadBinds();
+        this._width = 1280;
+        this._height = 720;
         console.log("CRE initialized for game:", game);
         console.log("this.game: ", this.game);
         
@@ -108,17 +106,23 @@ class CRE {
 
         // Setup input
         window.addEventListener("keydown", e => {
-            if (!this.consoleOpen) this.keys[e.key] = true;
+            if (!this.consoleOpen) {
+                this.keys[e.key] = true;
+                // Check for key binds
+                if (this.keyBinds[e.key.toLowerCase()]) {
+                    this.ConsoleHandler(...this.keyBinds[e.key.toLowerCase()].split(' '));
+                }
+            }
         });
         window.addEventListener("keyup", e => {
             if (!this.consoleOpen) this.keys[e.key] = false;
         });
 
-        // Set canvas size to match container
-        this.updateCanvasSize();
-        
-        // Handle resize
-        window.addEventListener('resize', () => this.updateCanvasSize());
+        // Set fixed canvas size
+        this.canvas.width = this._width;
+        this.canvas.height = this._height;
+        this.container.style.width = this._width + 'px';
+        this.container.style.height = this._height + 'px';
         
         // Property setters for width/height
         Object.defineProperty(this, 'width', {
@@ -153,11 +157,7 @@ class CRE {
         requestAnimationFrame(this.gameLoop.bind(this));
     }
 
-    updateCanvasSize() {
-        const rect = this.container.getBoundingClientRect();
-        this.canvas.width = rect.width;
-        this.canvas.height = rect.height;
-    }
+
     
     // Register a class as an entity
     RegisterEntity(cls, name, runType = this.Enums.RunType.CLIENT) {
@@ -211,6 +211,40 @@ class CRE {
             case "height":
                 if (args[0]) this.height = parseInt(args[0]);
                 this.addToConsole(`Height = ${this.height}`);
+                break;
+            case "bind":
+                if (args.length >= 2) {
+                    const key = args[0].toLowerCase();
+                    const command = args.slice(1).join(' ').replace(/"/g, '');
+                    this.keyBinds[key] = command;
+                    this.saveBinds();
+                    this.addToConsole(`Bound ${key} to "${command}"`);
+                } else {
+                    this.addToConsole("Usage: bind <key> <command>");
+                }
+                break;
+            case "unbind":
+                if (args[0]) {
+                    const key = args[0].toLowerCase();
+                    if (this.keyBinds[key]) {
+                        delete this.keyBinds[key];
+                        this.saveBinds();
+                        this.addToConsole(`Unbound ${key}`);
+                    } else {
+                        this.addToConsole(`${key} is not bound`);
+                    }
+                } else {
+                    this.addToConsole("Usage: unbind <key>");
+                }
+                break;
+            case "bindlist":
+                if (Object.keys(this.keyBinds).length === 0) {
+                    this.addToConsole("No key binds");
+                } else {
+                    Object.entries(this.keyBinds).forEach(([key, cmd]) => {
+                        this.addToConsole(`${key} = "${cmd}"`);
+                    });
+                }
                 break;
             default:
                 this.addToConsole(`Unknown command: ${command}`);
@@ -302,7 +336,37 @@ class CRE {
             });
         });
         
-        this.Msg(`Loaded map: ${mapData.name || 'unnamed'}`);
+        this.addToConsole(`Map loaded: ${mapData.name || 'Unnamed'}`);
+    }
+    
+    // Auto-load map function for game code
+    LoadMa(mapName) {
+        fetch(`uploads/games/${this.game}/maps/${mapName}.map?v=${Date.now()}`)
+            .then(r => r.json())
+            .then(data => {
+                this.LoadMap(data);
+                console.log(`Auto-loaded map: ${mapName}`);
+            })
+            .catch(err => {
+                console.warn(`Failed to auto-load map: ${mapName}`, err);
+            });
+    }
+    
+    // Save binds to localStorage
+    saveBinds() {
+        localStorage.setItem(`crengine_binds_${this.game}`, JSON.stringify(this.keyBinds));
+    }
+    
+    // Load binds from localStorage
+    loadBinds() {
+        const saved = localStorage.getItem(`crengine_binds_${this.game}`);
+        if (saved) {
+            try {
+                this.keyBinds = JSON.parse(saved);
+            } catch (e) {
+                console.warn('Failed to load saved binds:', e);
+            }
+        }
     }
 
     // Utility functions
@@ -783,13 +847,13 @@ class Transform {
     setScale(x, y, z) { this.scale = { x, y, z }; }
     // Add other methods that might be useful
     getForwardVector() {
-        const yaw = (this.rotation.y + 90) * Math.PI / 180;
+        const yaw = this.rotation.y * Math.PI / 180;
         const pitch = this.rotation.x * Math.PI / 180;
 
         return {
-            x: Math.cos(yaw) * Math.cos(pitch),
+            x: Math.sin(yaw) * Math.cos(pitch),
             y: -Math.sin(pitch),
-            z: Math.sin(yaw) * Math.cos(pitch)
+            z: Math.cos(yaw) * Math.cos(pitch)
         };
     }
 
@@ -799,7 +863,7 @@ class Transform {
         return {
             x: Math.cos(yaw),
             y: 0,
-            z: Math.sin(yaw)
+            z: -Math.sin(yaw)
         };
     }
 
