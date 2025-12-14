@@ -12,6 +12,13 @@ try {
     $stmt = $pdo->prepare("SELECT * FROM games WHERE owner_user_id = ? ORDER BY created_at DESC");
     $stmt->execute([$user['id']]);
     $user_games = $stmt->fetchAll();
+
+$mapStatusToLabel = [
+    'PLAYABLE' => '[HideMe]',
+    'PUBLIC_UNPLAYABLE' => 'Non-playable',
+    'DRAFT' => 'Draft',
+    'WHITELISTED' => 'Whitelisted',
+];
 } catch (PDOException $e) {
     die("Error: " . $e->getMessage());
 }
@@ -156,8 +163,9 @@ try {
                             <?php endif; ?>
                         </div>
                         <div>
+                            <?php $statusLabel = $mapStatusToLabel[$game['status']] ?? $game['status']; ?>
                             <span class="status-badge status-<?= strtolower($game['status']) ?>">
-                                <?= htmlspecialchars($game['status']) ?>
+                                <?= htmlspecialchars($statusLabel) ?>
                             </span>
                         </div>
                         <div><?= htmlspecialchars($game['current_version']) ?></div>

@@ -26,6 +26,13 @@ try {
 }
 
 $current_user = getCurrentUser();
+
+$mapStatusToLabel = [
+    'PLAYABLE' => '[HideMe]',
+    'PUBLIC_UNPLAYABLE' => 'Non-playable',
+    'DRAFT' => 'Draft',
+    'WHITELISTED' => 'Whitelisted',
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -166,9 +173,12 @@ $current_user = getCurrentUser();
                                 <?php if ($game['genre']): ?>
                                     <div class="game-card-genre"><?= htmlspecialchars($game['genre']) ?></div>
                                 <?php endif; ?>
-                                <span class="game-status status-<?= strtolower($game['status']) ?>">
-                                    <?= htmlspecialchars($game['status']) ?>
-                                </span>
+                                <?php $statusLabel = $mapStatusToLabel[$game['status']] ?? '[HideMe]'; ?>
+                                <?php if ($statusLabel !== '[HideMe]'): ?>
+                                    <span class="game-status status-<?= strtolower($game['status']) ?>">
+                                        <?= htmlspecialchars($statusLabel) ?>
+                                    </span>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
