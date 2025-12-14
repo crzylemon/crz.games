@@ -222,11 +222,12 @@ if ($game['uses_crengine']) {
     </div>
     <script>
         function autoScale() {
+            if (!document.getElementById('autoScale').checked) return;
             const iframe = document.querySelector('.game-frame');
             const rect = iframe.getBoundingClientRect();
             const scaleX = window.innerWidth / rect.width;
             const scaleY = window.innerHeight / rect.height;
-            const scale = Math.min(scaleX, scaleY);
+            const scale = Math.min(scaleX, scaleY) * 0.95;
             iframe.style.transform = `scale(${scale})`;
             iframe.style.transformOrigin = 'top left';
         }
@@ -251,6 +252,65 @@ if ($game['uses_crengine']) {
         function closeOverlay() {
             document.getElementById('overlay').style.display = 'none';
         }
+        
+        function openWindow(windowId) {
+            document.getElementById(windowId).style.display = 'block';
+        }
+        
+        function closeWindow(windowId) {
+            document.getElementById(windowId).style.display = 'none';
+        }
+        
+        // Make windows draggable
+        let draggedWindow = null;
+        let dragOffset = { x: 0, y: 0 };
+        
+        document.addEventListener('mousedown', function(e) {
+            if (e.target.classList.contains('window-header') || e.target.parentElement.classList.contains('window-header')) {
+                draggedWindow = e.target.closest('.window');
+                const rect = draggedWindow.getBoundingClientRect();
+                dragOffset.x = e.clientX - rect.left;
+                dragOffset.y = e.clientY - rect.top;
+                draggedWindow.style.zIndex = 1001;
+            }
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (draggedWindow) {
+                draggedWindow.style.left = (e.clientX - dragOffset.x) + 'px';
+                draggedWindow.style.top = (e.clientY - dragOffset.y) + 'px';
+            }
+        });
+        
+        document.addEventListener('mouseup', function() {
+            if (draggedWindow) {
+                draggedWindow.style.zIndex = 'auto';
+                draggedWindow = null;
+            }
+        });
+        
+        // Settings functionality
+        document.getElementById('volume').addEventListener('input', function() {
+            document.getElementById('volumeValue').textContent = this.value;
+        });
+        
+        document.getElementById('fullscreen').addEventListener('change', function() {
+            if (this.checked) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        });
+        
+        document.getElementById('autoScale').addEventListener('change', function() {
+            if (this.checked) {
+                autoScale();
+                window.addEventListener('resize', autoScale);
+            } else {
+                document.querySelector('.game-frame').style.transform = 'none';
+                window.removeEventListener('resize', autoScale);
+            }
+        });
         
         function openWindow(windowId) {
             document.getElementById(windowId).style.display = 'block';
