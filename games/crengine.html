@@ -783,23 +783,23 @@ class Transform {
     setScale(x, y, z) { this.scale = { x, y, z }; }
     // Add other methods that might be useful
     getForwardVector() {
-        const yaw = this.rotation.y * Math.PI / 180;
+        const yaw = (this.rotation.y + 90) * Math.PI / 180;
         const pitch = this.rotation.x * Math.PI / 180;
 
         return {
-            x: Math.sin(yaw) * Math.cos(pitch),
+            x: Math.cos(yaw) * Math.cos(pitch),
             y: -Math.sin(pitch),
-            z: Math.cos(yaw) * Math.cos(pitch)
+            z: Math.sin(yaw) * Math.cos(pitch)
         };
     }
 
     getRightVector() {
-        const yaw = (this.rotation.y + 90) * Math.PI / 180;
+        const yaw = this.rotation.y * Math.PI / 180;
 
         return {
-            x: Math.sin(yaw),
+            x: Math.cos(yaw),
             y: 0,
-            z: Math.cos(yaw)
+            z: Math.sin(yaw)
         };
     }
 

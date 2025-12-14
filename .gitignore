@@ -8,3 +8,4 @@ user/session.php
 *.sql
 *.sqlite
 *.sqlite3
+amazonq/
