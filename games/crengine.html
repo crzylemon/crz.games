@@ -582,11 +582,21 @@ class CRE {
                 const normalY = abz * acx - abx * acz;
                 const normalZ = abx * acy - aby * acx;
                 
-                // Dot product with view direction (0,0,1 in camera space)
-                const dot = normalZ;
+                // Calculate view direction from face center to camera (0,0,0 in camera space)
+                const centerX = (ca.x + cb.x + cc.x) / 3;
+                const centerY = (ca.y + cb.y + cc.y) / 3;
+                const centerZ = (ca.z + cb.z + cc.z) / 3;
+                
+                // View direction points from face toward camera origin
+                const viewX = -centerX;
+                const viewY = -centerY;
+                const viewZ = -centerZ;
+                
+                // Dot product between normal and view direction
+                const dot = normalX * viewX + normalY * viewY + normalZ * viewZ;
                 
                 // Only render front-facing triangles
-                if (dot > 0) {
+                if (dot < 0) {
                     const ca = this.toCameraSpace(a);
                     const cb = this.toCameraSpace(b);
                     const cc = this.toCameraSpace(c);
@@ -629,15 +639,36 @@ class CRE {
                         const v1 = brush.vertices[face[0]];
                         const v2 = brush.vertices[face[i]];
                         const v3 = brush.vertices[face[i + 1]];
-                        // Use the same transformation as project3D for consistent depth
-                        const p1 = this.project3D(v1);
-                        const p2 = this.project3D(v2);
-                        const p3 = this.project3D(v3);
-                        if (p1 && p2 && p3) {
-                            const ca = this.toCameraSpace(v1);
-                            const cb = this.toCameraSpace(v2);
-                            const cc = this.toCameraSpace(v3);
-
+                        
+                        // Calculate world space normal for lighting
+                        const ab = v2.subtract(v1);
+                        const ac = v3.subtract(v1);
+                        const worldNormal = ab.cross(ac).normalize();
+                        
+                        // Calculate lighting in world space
+                        const lightDir = new Vector(0.5, -1, 0.3).normalize();
+                        const lightDot = worldNormal.dot(lightDir);
+                        const shade = Math.max(0.3, Math.abs(lightDot));
+                        
+                        // Backface culling in camera space
+                        const ca = this.toCameraSpace(v1);
+                        const cb = this.toCameraSpace(v2);
+                        const cc = this.toCameraSpace(v3);
+                        
+                        const abx = cb.x - ca.x, aby = cb.y - ca.y, abz = cb.z - ca.z;
+                        const acx = cc.x - ca.x, acy = cc.y - ca.y, acz = cc.z - ca.z;
+                        const normalX = aby * acz - abz * acy;
+                        const normalY = abz * acx - abx * acz;
+                        const normalZ = abx * acy - aby * acx;
+                        
+                        const centerX = (ca.x + cb.x + cc.x) / 3;
+                        const centerY = (ca.y + cb.y + cc.y) / 3;
+                        const centerZ = (ca.z + cb.z + cc.z) / 3;
+                        
+                        const dot = normalX * (-centerX) + normalY * (-centerY) + normalZ * (-centerZ);
+                        
+                        if (dot < 0) {
+                            
                             const minZ = Math.min(ca.z, cb.z, cc.z);
                             const maxZ = Math.max(ca.z, cb.z, cc.z);
 
@@ -645,7 +676,7 @@ class CRE {
                                 type: 'triangle',
                                 verts: [v1, v2, v3],
                                 color: brush.texture,
-                                shade: 1,
+                                shade,
                                 minZ,
                                 maxZ
                             });
@@ -664,10 +695,16 @@ class CRE {
             }
         });
         
-        // Sort by Z depth (farthest first) and render
+        // Sort by Z depth with intersection handling
         this.renderQueue.sort((a, b) => {
             if (a.minZ >= b.maxZ) return -1;
             if (b.minZ >= a.maxZ) return 1;
+            
+            // Check for triangle intersection
+            if (this.trianglesIntersect(a, b)) {
+                return this.compareIntersectingTriangles(a, b);
+            }
+            
             return b.maxZ - a.maxZ;
         });
 
@@ -682,6 +719,54 @@ class CRE {
         this.drawGUI();
 
         requestAnimationFrame(this.gameLoop.bind(this));
+    }
+    
+    trianglesIntersect(a, b) {
+        if (a.type !== 'triangle' || b.type !== 'triangle') return false;
+        const [a1, a2, a3] = a.verts.map(v => this.toCameraSpace(v));
+        const [b1, b2, b3] = b.verts.map(v => this.toCameraSpace(v));
+        return this.triangleTriangleIntersect(a1, a2, a3, b1, b2, b3);
+    }
+    
+    triangleTriangleIntersect(t1v1, t1v2, t1v3, t2v1, t2v2, t2v3) {
+        const n1 = this.crossProduct(this.subtract(t1v2, t1v1), this.subtract(t1v3, t1v1));
+        const d1 = -this.dotProduct(n1, t1v1);
+        const dist2 = [t2v1, t2v2, t2v3].map(v => this.dotProduct(n1, v) + d1);
+        const sign2 = dist2.map(d => Math.sign(d));
+        if (sign2[0] === sign2[1] && sign2[1] === sign2[2] && sign2[0] !== 0) return false;
+        
+        const n2 = this.crossProduct(this.subtract(t2v2, t2v1), this.subtract(t2v3, t2v1));
+        const d2 = -this.dotProduct(n2, t2v1);
+        const dist1 = [t1v1, t1v2, t1v3].map(v => this.dotProduct(n2, v) + d2);
+        const sign1 = dist1.map(d => Math.sign(d));
+        if (sign1[0] === sign1[1] && sign1[1] === sign1[2] && sign1[0] !== 0) return false;
+        
+        return true;
+    }
+    
+    compareIntersectingTriangles(a, b) {
+        const aCentroid = this.getTriangleCentroid(a.verts);
+        const bCentroid = this.getTriangleCentroid(b.verts);
+        const aDepth = this.toCameraSpace(aCentroid).z;
+        const bDepth = this.toCameraSpace(bCentroid).z;
+        return bDepth - aDepth;
+    }
+    
+    getTriangleCentroid(verts) {
+        const [v1, v2, v3] = verts;
+        return new Vector((v1.x + v2.x + v3.x) / 3, (v1.y + v2.y + v3.y) / 3, (v1.z + v2.z + v3.z) / 3);
+    }
+    
+    crossProduct(a, b) {
+        return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x };
+    }
+    
+    dotProduct(a, b) {
+        return a.x * b.x + a.y * b.y + a.z * b.z;
+    }
+    
+    subtract(a, b) {
+        return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
     }
 }
 class Transform {
@@ -732,6 +817,18 @@ class Vector {
 
     add(v) {
         return new Vector(this.x + v.x, this.y + v.y, this.z + v.z);
+    }
+    
+    dot(v) {
+        return this.x * v.x + this.y * v.y + this.z * v.z;
+    }
+    
+    cross(v) {
+        return new Vector(
+            this.y * v.z - this.z * v.y,
+            this.z * v.x - this.x * v.z,
+            this.x * v.y - this.y * v.x
+        );
     }
 
     subtract(v) {
