@@ -24,7 +24,7 @@ $mapStatusToLabel = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Games - CRZ Games</title>
+    <title>Games - CRZ.Games</title>
     <link rel="stylesheet" href="../css/style.css">
     <style>
         .games-grid {

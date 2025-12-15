@@ -35,14 +35,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - CRZ Network</title>
+    <title>Login - CRZ.Network</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
     <div class="container">
         <div class="game-header">
             <h1 class="game-title">Sign In</h1>
-            <p class="game-genre">Welcome back to CRZ Network</p>
+            <p class="game-genre">Welcome back to CRZ.Network</p>
         </div>
         
         <div class="game-content">
@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             <div class="game-info">
                 <div class="info-section">
-                    <div class="info-title">Join CRZ Network</div>
+                    <div class="info-title">Join CRZ.Network</div>
                     <div class="info-value">Access exclusive games, upload videos, and connect with our community.</div>
                 </div>
                 

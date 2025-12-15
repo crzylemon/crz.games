@@ -50,7 +50,7 @@ if ($game['uses_crengine']) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Playing <?= htmlspecialchars($game['title']) ?> - CRZ Games</title>
+    <title><?= htmlspecialchars($game['title']) ?> - CRZ.Games</title>
     <style>
         body {
             margin: 0;
@@ -97,6 +97,7 @@ if ($game['uses_crengine']) {
             display: flex;
             align-items: center;
             padding: 0 20px;
+            box-sizing: border-box;
             box-shadow: 0 2px 10px rgba(0,0,0,0.5);
         }
         .overlay-button {
@@ -114,7 +115,6 @@ if ($game['uses_crengine']) {
             background: rgba(255,255,255,0.2);
         }
         .overlay-close {
-            margin-left: auto;
             background: #d32f2f;
             border: none;
         }
@@ -173,13 +173,15 @@ if ($game['uses_crengine']) {
         <h2>Loading <?= htmlspecialchars($game['title']) ?>...</h2>
     </div>
     <iframe src="<?= htmlspecialchars($gameUrl) ?>" class="game-frame" onload="document.getElementById('loading').style.display='none'; autoScale()"></iframe>
+    <button id="overlayToggle" onclick="toggleOverlay()" style="position: fixed; top: 10px; right: 10px; z-index: 999; background: rgba(0,0,0,0.7); color: white; border: 1px solid #555; padding: 5px 10px; border-radius: 3px; font-size: 12px; cursor: pointer;">☰</button>
     
     <div class="overlay" id="overlay">
         <div class="overlay-topbar">
             <button class="overlay-button" onclick="openWindow('gameInfo')">Game Info</button>
             <button class="overlay-button" onclick="openWindow('settings')">Settings</button>
             <button class="overlay-button" onclick="openWindow('help')">Help</button>
-            <button class="overlay-button overlay-close" onclick="closeOverlay()">×</button>
+            <button class="overlay-button" onclick="window.location.href='/games/game.php?slug=<?= $game['slug'] ?>'">Exit Game</button>
+            <button class="overlay-button overlay-close" onclick="closeOverlay()" style="margin-left: auto;">×</button>
         </div>
         
         
@@ -190,7 +192,9 @@ if ($game['uses_crengine']) {
             </div>
             <div class="window-content">
                 <h3>Game Settings</h3>
-                <p><label><input type="checkbox" id="fullscreen"> Fullscreen Mode</label></p>
+                <p><label><input type="checkbox" id="fullscreen" disabled> Fullscreen Mode</label></p>
+                <p><button onclick="document.documentElement.requestFullscreen()" style="background: #2a5298; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Enter Fullscreen</button></p>
+                <p><button onclick="document.exitFullscreen()" style="background: #d32f2f; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Exit Fullscreen</button></p>
                 <p><label><input type="range" id="volume" min="0" max="100" value="50"> Volume: <span id="volumeValue">50</span>%</label></p>
                 <p><label><input type="checkbox" id="autoScale" checked> Auto Scale</label></p>
             </div>
@@ -203,9 +207,10 @@ if ($game['uses_crengine']) {
             </div>
             <div class="window-content">
                 <h3>Controls</h3>
-                <p><strong>Shift+Tab:</strong> Toggle overlay</p>
+                <p><strong>Shift+Tab:</strong> Toggle overlay (when page has focus)</p>
+                <p><strong>☰ Button:</strong> Toggle overlay (always works)</p>
                 <p><strong>Drag:</strong> Move windows by their title bar</p>
-                <p><strong>ESC:</strong> Close overlay</p>
+
             </div>
         </div>
 
@@ -277,20 +282,31 @@ if ($game['uses_crengine']) {
         }
         window.addEventListener('resize', autoScale);
         
-        // Overlay toggle
+        // Global key capture using document focus trick
         document.addEventListener('keydown', function(e) {
             if (e.shiftKey && e.code === 'Tab') {
                 e.preventDefault();
                 toggleOverlay();
             }
-            if (e.key === 'Escape') {
-                closeOverlay();
+        });
+        
+
+        
+        // Listen for messages from iframe
+        window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'shiftTab') {
+                toggleOverlay();
             }
         });
+        
         
         function toggleOverlay() {
             const overlay = document.getElementById('overlay');
             overlay.style.display = overlay.style.display === 'block' ? 'none' : 'block';
+            // Ensure parent window gets focus when overlay opens
+            if (overlay.style.display === 'block') {
+                window.focus();
+            }
         }
         
         function closeOverlay() {
@@ -339,11 +355,13 @@ if ($game['uses_crengine']) {
         });
         
         document.getElementById('fullscreen').addEventListener('change', function() {
-            if (this.checked) {
-                document.documentElement.requestFullscreen();
-            } else {
-                document.exitFullscreen();
-            }
+            // Don't auto-trigger fullscreen, let user control manually
+            this.checked = document.fullscreenElement !== null;
+        });
+        
+        // Update checkbox when fullscreen state changes
+        document.addEventListener('fullscreenchange', function() {
+            document.getElementById('fullscreen').checked = document.fullscreenElement !== null;
         });
         
         document.getElementById('autoScale').addEventListener('change', function() {

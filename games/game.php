@@ -23,25 +23,36 @@ try {
 } catch (PDOException $e) {
     die("Error: " . $e->getMessage());
 }
+
+$mapStatusToLabel = [
+    'PLAYABLE' => '[HideMe]',
+    'PUBLIC_UNPLAYABLE' => 'Non-playable',
+    'DRAFT' => 'Draft',
+    'WHITELISTED' => 'Whitelisted',
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($game['title']) ?> - CRZ Games</title>
+    <title><?= htmlspecialchars($game['title']) ?> - CRZ.Games</title>
     <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
+    <button onclick="window.location.href='index.php'" style="position: fixed; top: 20px; right: 20px; background: #2a5298; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; z-index: 1000;">← Back to Games</button>
     <div class="container">
         <div class="game-header">
             <h1 class="game-title"><?= htmlspecialchars($game['title']) ?></h1>
             <?php if ($game['genre']): ?>
                 <div class="game-genre"><?= htmlspecialchars($game['genre']) ?></div>
             <?php endif; ?>
+            <?php $statusLabel = $mapStatusToLabel[$game['status']] ?? '[HideMe]'; ?>
+            <?php if ($statusLabel !== '[HideMe]'): ?>
             <span class="game-status status-<?= strtolower($game['status']) ?>">
-                <?= htmlspecialchars($game['status']) ?>
+                <?= htmlspecialchars($statusLabel) ?>
             </span>
+            <?php endif; ?>
         </div>
 
         <div class="game-content">
