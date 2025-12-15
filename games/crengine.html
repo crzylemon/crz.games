@@ -71,8 +71,16 @@
         </div>
     </div>
 <script>
+
 class CRE {
     constructor(canvas, game) {
+        this.crzgames = false; //running from crz.games (then use uploads/games/...) (crz.games is the url, not like crz.games.com or crzgames.com, just crz.games)
+        this.base = "";
+        // change this to true when deploying to crz.games
+        if (window.location.hostname === "crz.games") {
+            this.crzgames = true;
+            this.base = "uploads/games/";
+        }
         this.canvas = canvas;
         this.container = document.getElementById("gamecontainer");
         this.ctx = canvas.getContext("2d");
@@ -94,6 +102,11 @@ class CRE {
         this._height = 720;
         console.log("CRE initialized for game:", game);
         console.log("this.game: ", this.game);
+        // add convar for cheats and stuff
+        this.cheats = this.RegisterConVar("sv_cheats", "0");
+        this.fov = this.RegisterConVar("fov", "60");
+        this.nearplane = this.RegisterConVar("near_plane", "0.01");
+        this.farplane = this.RegisterConVar("far_plane", "1000");
         
         // 3D Camera
         this.camera = {
@@ -108,10 +121,11 @@ class CRE {
         window.addEventListener("keydown", e => {
             if (!this.consoleOpen) {
                 this.keys[e.key] = true;
-                // Check for key binds
-                if (this.keyBinds[e.key.toLowerCase()]) {
-                    this.ConsoleHandler(...this.keyBinds[e.key.toLowerCase()].split(' '));
-                }
+            }
+            // Check for key binds (works regardless of console state)
+            if (this.keyBinds[e.key.toLowerCase()]) {
+                e.preventDefault();
+                this.ConsoleHandler(...this.keyBinds[e.key.toLowerCase()].split(' '));
             }
         });
         window.addEventListener("keyup", e => {
@@ -149,6 +163,18 @@ class CRE {
                 CLIENT: "CLIENT",
                 SERVER: "SERVER",
                 SHARED: "SHARED"
+            },
+            ConVarFlags: {
+                NONE: CONVAR_NONE,
+                CHEAT: CONVAR_CHEAT,
+                REPLICATED: CONVAR_REPLICATED,
+                ARCHIVE: CONVAR_ARCHIVE,
+                NOTIFY: CONVAR_NOTIFY,
+                USERINFO: CONVAR_USERINFO,
+                PROTECTED: CONVAR_PROTECTED,
+                SPONLY: CONVAR_SPONLY,
+                DEMO: CONVAR_DEMO,
+                DONTRECORD: CONVAR_DONTRECORD
             }
         };
 
@@ -176,7 +202,13 @@ class CRE {
         // Check convars
         if (this.conVars[command]) {
             if (args.length > 0) {
-                this.conVars[command].value = args[0];
+                const convar = this.conVars[command];
+                // Check if it's a cheat convar and cheats are disabled
+                if (convar.hasFlag(CONVAR_CHEAT) && !this.GetConVar("sv_cheats")) {
+                    this.addToConsole(`Can't change ${command}, cheats are not enabled.`);
+                    return;
+                }
+                convar.value = args[0];
                 this.addToConsole(`${command} = ${args[0]}`);
             } else {
                 this.addToConsole(`${command} = ${this.conVars[command].value}`);
@@ -199,7 +231,9 @@ class CRE {
                 document.getElementById('console-output').textContent = '';
                 break;
             case "map_load":
-                fetch(`uploads/games/${this.game}/maps/${args[0]}.map?v=${Date.now()}`)
+                // crzgames
+                
+                fetch(`${this.base}${this.game}/maps/${args[0]}.map?v=${Date.now()}`)
                     .then(r => r.json())
                     .then(data => this.LoadMap(data))
                     .catch(() => this.addToConsole(`Failed to load map: ${args[0]}`));
@@ -307,8 +341,8 @@ class CRE {
     }
     
     // Register console variable
-    RegisterConVar(name, defaultValue) {
-        this.conVars[name] = { value: defaultValue };
+    RegisterConVar(name, defaultValue, flags, help) {
+        this.conVars[name] = new ConVar(name, defaultValue, flags, help);
         return this.conVars[name];
     }
     
@@ -346,8 +380,8 @@ class CRE {
     }
     
     // Auto-load map function for game code
-    LoadMap(mapName) {
-        fetch(`uploads/games/${this.game}/maps/${mapName}.map?v=${Date.now()}`)
+    LoadMapFromName(mapName) {
+        fetch(`${this.base}${this.game}/maps/${mapName}.map?v=${Date.now()}`)
             .then(r => r.json())
             .then(data => {
                 this.LoadMap(data);
@@ -703,6 +737,12 @@ class CRE {
         const dt = (now - this.lastTime) / 1000;
         this.lastTime = now;
 
+        // update any convar stuff
+        this.camera.fov = parseFloat(this.GetConVar("fov")) || 60;
+        this.camera.near = parseFloat(this.GetConVar("near_plane")) || 0.01;
+        this.camera.far = parseFloat(this.GetConVar("far_plane")) || 1000;
+        // update 
+
         // Update entities
         this.entities.forEach(ent => {
             if (ent.update) ent.update(dt, this);
@@ -934,7 +974,40 @@ class Vector {
         return this.divide(len);
     }
 }
+// ConVar flags
+const CONVAR_NONE = 0;
+const CONVAR_CHEAT = 1;
+const CONVAR_REPLICATED = 2;
+const CONVAR_ARCHIVE = 4;
+const CONVAR_NOTIFY = 8;
+const CONVAR_USERINFO = 16;
+const CONVAR_PROTECTED = 32;
+const CONVAR_SPONLY = 64;
+const CONVAR_DEMO = 128;
+const CONVAR_DONTRECORD = 256;
 
+class ConVar {
+    constructor(name, defaultValue, flags, help) {
+        this.name = name;
+        this.value = defaultValue;
+        this.flags = flags || CONVAR_NONE;
+        this.help = help || "";
+    }
+    
+    hasFlag(flag) {
+        return (this.flags & flag) !== 0;
+    }
+    getAsNumber() {
+        return parseFloat(this.value);
+    }
+    getAsString() {
+        return String(this.value);
+    }
+    getAsBoolean() {
+        return this.value === '1' || this.value.toLowerCase() === 'true';
+    }
+    
+}
 
 const urlParams = new URLSearchParams(window.location.search);
 const gameName = urlParams.get('game') || 'game';
@@ -946,8 +1019,14 @@ window.CRE = cre; // Make CRE instance globally available
 
 // Get game name from URL parameter
 
+// if from crz.games, put uploads/games at the start of the path
+let baseURL = "";
+if (document.referrer.includes("crz.games")) {
+    baseURL = "uploads/games/";
+    cre.base = "uploads/games/";
+}
 
-fetch(`uploads/games/${gameName}/bin/client.cre?v=${Date.now()}`)
+fetch(`${baseURL}${gameName}/bin/client.cre?v=${Date.now()}`)
   .then(r => r.text())
   .then(code => new Function("CRE", code)(cre))
   .catch(() => {
@@ -957,12 +1036,6 @@ fetch(`uploads/games/${gameName}/bin/client.cre?v=${Date.now()}`)
       .then(code => new Function("CRE", code)(cre));
   }); 
 // Console toggle and input handling
-window.addEventListener("keydown", e => {
-    if (e.key === "`") {
-        e.preventDefault();
-        cre.toggleConsole();
-    }
-});
 
 const consoleInput = document.getElementById('console-input');
 const suggestions = document.getElementById('console-suggestions');

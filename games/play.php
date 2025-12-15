@@ -182,19 +182,6 @@ if ($game['uses_crengine']) {
             <button class="overlay-button overlay-close" onclick="closeOverlay()">×</button>
         </div>
         
-        <div class="window" id="gameInfo" style="top: 100px; left: 100px;">
-            <div class="window-header">
-                <span class="window-title">Game Information</span>
-                <button class="window-close" onclick="closeWindow('gameInfo')">×</button>
-            </div>
-            <div class="window-content">
-                <h3><?= htmlspecialchars($game['title']) ?></h3>
-                <p><strong>Play Count:</strong> <?= number_format($game['play_count']) ?></p>
-                <p><strong>Developer:</strong> <?= htmlspecialchars($game['developer'] ?? 'Unknown') ?></p>
-                <p><strong>Status:</strong> <?= htmlspecialchars($game['status']) ?></p>
-                <p><strong>Game ID:</strong> <?= $game['id'] ?></p>
-            </div>
-        </div>
         
         <div class="window" id="settings" style="top: 150px; left: 200px;">
             <div class="window-header">
@@ -222,10 +209,10 @@ if ($game['uses_crengine']) {
             </div>
         </div>
 
-        <div class="window" id="help" style="top: 150px; left: 500px;">
+        <div class="window" id="gameInfo" style="top: 150px; left: 500px;">
             <div class="window-header">
                 <span class="window-title">Game</span>
-                <button class="window-close" onclick="closeWindow('help')">×</button>
+                <button class="window-close" onclick="closeWindow('gameInfo')">×</button>
             </div>
             <div class="window-content">
                 <h3>Game</h3>
@@ -243,11 +230,12 @@ if ($game['uses_crengine']) {
                     <li><strong>F1:</strong> Toggle Debug Info</li>
                     <li><strong>`:</strong> Toggle Console</li>
                 </ul>
-                <h3>CRENGINE Console Commands</h3>
+                <h3>CRENGINE Console Tips And Tricks</h3>
                 <ul>
-                    <li><strong>godmode:</strong> Toggle God Mode</li>
-                    <li><strong>noclip:</strong> Toggle No Clipping Mode</li>
-                    <li><strong>set_fov [value]:</strong> Set Field of View</li>
+                    <li><strong>help:</strong> Show all commands</li>
+                    <li><strong>bind &lt;key&gt; &lt;command&gt;:</strong> Bind a command to a key (Use bind key "" to unbind)</li>
+                    <li><strong>sv_cheats 1</strong>: Enable cheats (use 0 instead of 1 to disable)</li>
+                    <li><strong>bindlist</strong>: Check all your binded keys</li>
                 </ul>
                 <?php endif; ?>
                 <h3>Support</h3>
