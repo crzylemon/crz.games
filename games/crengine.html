@@ -857,69 +857,27 @@ class CRE {
         
         // Apply rotation and position
         const v = baseVertices.map(vertex => 
-            this.rotateVertex(pos.add(vertex), rotation, pos)
+            this.rotateVertex(vertex, rotation, new Vector(0, 0, 0)).add(pos)
         );
         
         // Create faces with z-depth for sorting
         const faces = [
-            {verts: [v[0],v[1],v[2]], shade: 0.6}, {verts: [v[0],v[2],v[3]], shade: 0.6}, // back
-            {verts: [v[4],v[7],v[6]], shade: 1.0}, {verts: [v[4],v[6],v[5]], shade: 1.0}, // front
-            {verts: [v[0],v[4],v[5]], shade: 0.4}, {verts: [v[0],v[5],v[1]], shade: 0.4}, // bottom
-            {verts: [v[2],v[6],v[7]], shade: 0.9}, {verts: [v[2],v[7],v[3]], shade: 0.9}, // top
-            {verts: [v[0],v[3],v[7]], shade: 0.7}, {verts: [v[0],v[7],v[4]], shade: 0.7}, // left
-            {verts: [v[1],v[5],v[6]], shade: 0.8}, {verts: [v[1],v[6],v[2]], shade: 0.8}  // right
+            {verts: [v[0],v[3],v[2]], shade: 0.6}, {verts: [v[0],v[2],v[1]], shade: 0.6}, // back
+            {verts: [v[4],v[5],v[6]], shade: 1.0}, {verts: [v[4],v[6],v[7]], shade: 1.0}, // front
+            {verts: [v[0],v[1],v[5]], shade: 0.4}, {verts: [v[0],v[5],v[4]], shade: 0.4}, // bottom
+            {verts: [v[2],v[3],v[7]], shade: 0.9}, {verts: [v[2],v[7],v[6]], shade: 0.9}, // top
+            {verts: [v[0],v[4],v[7]], shade: 0.7}, {verts: [v[0],v[7],v[3]], shade: 0.7}, // left
+            {verts: [v[1],v[2],v[6]], shade: 0.8}, {verts: [v[1],v[6],v[5]], shade: 0.8}  // right
         ];
         
-        // Calculate camera-space Z depth for each face and add to render queue
+        // Add faces to render queue
         faces.forEach(({verts: [a,b,c], shade}) => {
-            // Use the same transformation as project3D for consistent depth
-            const p1 = this.project3D(a);
-            const p2 = this.project3D(b);
-            const p3 = this.project3D(c);
-            if (p1 && p2 && p3) {
-                // Backface culling - check if triangle faces away from camera
-                const ca = this.toCameraSpace(a);
-                const cb = this.toCameraSpace(b);
-                const cc = this.toCameraSpace(c);
-
-                const abx = cb.x - ca.x;
-                const aby = cb.y - ca.y;
-                const abz = cb.z - ca.z;
-                const acx = cc.x - ca.x;
-                const acy = cc.y - ca.y;
-                const acz = cc.z - ca.z;
-
-                // Calculate proper cross product for normal
-                const normalX = aby * acz - abz * acy;
-                const normalY = abz * acx - abx * acz;
-                const normalZ = abx * acy - aby * acx;
-                
-                // Calculate view direction from face center to camera (0,0,0 in camera space)
-                const centerX = (ca.x + cb.x + cc.x) / 3;
-                const centerY = (ca.y + cb.y + cc.y) / 3;
-                const centerZ = (ca.z + cb.z + cc.z) / 3;
-                
-                // View direction points from face toward camera origin
-                const viewX = -centerX;
-                const viewY = -centerY;
-                const viewZ = -centerZ;
-                
-                // Dot product between normal and view direction
-                const dot = normalX * viewX + normalY * viewY + normalZ * viewZ;
-                
-                // Only render front-facing triangles
-                if (dot > 0) {
-                    const centroidZ = (ca.z + cb.z + cc.z) / 3;
-
-                    this.renderQueue.push({
-                        type: 'triangle',
-                        verts: [a, b, c],
-                        color: "#888888",
-                        shade,
-                        centroidZ
-                    });
-                }
-            }
+            this.renderQueue.push({
+                type: 'triangle',
+                verts: [a, b, c],
+                color: "#888888",
+                shade
+            });
         });
     }
 
@@ -1004,7 +962,7 @@ class CRE {
         
         // Add 3D entities to render queue
         this.entities.forEach(ent => {
-            if (!(ent.CRE.drawmode)) {return;};
+            if (ent.CRE.drawmode === undefined || ent.CRE.drawmode === null) {return;};
             if (!(ent.CRE.transform)) {return;};
             if (ent.CRE.drawmode === this.Enums.DrawMode.CUBE) {
                 this.drawCube3D(ent.CRE.transform);
