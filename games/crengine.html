@@ -248,8 +248,8 @@ class CRE {
             if (!this.consoleOpen) {
                 this.keys[e.key] = true;
             }
-            // Check for key binds (works regardless of console state)
-            if (this.keyBinds[e.key.toLowerCase()]) {
+            // Check for key binds (only when console is closed or for special keys)
+            if (this.keyBinds[e.key.toLowerCase()] && (!this.consoleOpen || e.key === '`')) {
                 e.preventDefault();
                 this.ConsoleHandler(...this.keyBinds[e.key.toLowerCase()].split(' '));
             }
