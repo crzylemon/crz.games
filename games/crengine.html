@@ -9,12 +9,12 @@
     canvas { display: block; background: #222; }
     #console {
         position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 50%;
+        top: 10px;
+        left: 10px;
+        width: calc(100% - 20px);
+        height: calc(100% - 20px);
         background: rgba(0, 0, 0, 0.9);
-        color: #0f0;
+        color: rgb(255, 255, 255);
         padding: 10px;
         box-sizing: border-box;
         display: none;
@@ -30,7 +30,7 @@
     #console-input {
         background: transparent;
         border: none;
-        color: #0f0;
+        color: rgb(255, 255, 255);
         font-family: inherit;
         font-size: 12px;
         outline: none;
@@ -38,7 +38,7 @@
     }
     #console-suggestions {
         background: rgba(0, 0, 0, 0.8);
-        color: #0f0;
+        color: rgb(199, 199, 199);
         font-size: 11px;
         max-height: 100px;
         overflow-y: auto;
@@ -59,6 +59,30 @@
         height: 100%;
         display: block;
     }
+    #errorPopup {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.95);
+        color: #f00;
+        padding: 20px;
+        border: 2px solid #f00;
+        font-family: monospace;
+        z-index: 1000;
+        display: none;
+        max-width: 80%;
+        max-height: 80%;
+        overflow: auto;
+    }
+    #errorPopup button {
+        margin: 5px;
+        padding: 10px;
+        background: #333;
+        color: #fff;
+        border: 1px solid #666;
+        cursor: pointer;
+    }
 </style>
 </head>
 <body>
@@ -70,6 +94,7 @@
             <input type="text" id="console-input" placeholder="] Enter command...">
         </div>
     </div>
+    <div id="errorPopup"></div>
 <script>
 
 class CRE {
@@ -81,10 +106,13 @@ class CRE {
             this.crzgames = true;
             this.base = "uploads/games/";
         }
+        this.version = "mega-1"
         this.canvas = canvas;
         this.container = document.getElementById("gamecontainer");
         this.ctx = canvas.getContext("2d");
         this.keys = {};
+        this.mouseDelta = { x: 0, y: 0 };
+        this.mouseCapture = false;
         this.entities = [];
         this.EntityClasses = {};
         this.RUN_TYPE = "CLIENT"; // Can be CLIENT, SERVER, SHARED
@@ -108,6 +136,102 @@ class CRE {
         this.nearplane = this.RegisterConVar("near_plane", "0.01");
         this.farplane = this.RegisterConVar("far_plane", "1000");
         
+        // Register built-in commands
+        this.RegisterConCommand("ent_spawn", (...args) => this.SpawnEntity(args[0], ...args.slice(1)), FCVAR_CHEAT, "Spawn an entity");
+        this.RegisterConCommand("game_reset", () => this.UTIL_RESET(), FCVAR_CHEAT, "Reset the game");
+        this.RegisterConCommand("ent_remove", (name) => {
+            const entity = this.entities.find(e => e.name === name);
+            if (entity) this.UTIL_REMOVE(entity);
+        }, FCVAR_CHEAT, "Remove an entity");
+        this.RegisterConCommand("clear", () => document.getElementById('console-output').textContent = '', FCVAR_NONE, "Clear console output");
+        this.RegisterConCommand("map_load", (mapName) => {
+            fetch(`${this.base}${this.game}/maps/${mapName}.map?v=${Date.now()}`)
+                .then(r => r.json())
+                .then(data => this.LoadMap(data))
+                .catch(() => this.addToConsole(`Failed to load map: ${mapName}`));
+        }, FCVAR_NONE, "Load a map");
+        this.RegisterConCommand("model_load", (modelName) => {
+            this.LoadModel(modelName).then(model => {
+                if (model) {
+                    window.loadedModel = model;
+                    this.addToConsole(`Model '${modelName}' loaded and available as window.loadedModel`);
+                }
+            });
+        }, FCVAR_NONE, "Load a model");
+        this.RegisterConCommand("width", (value) => {
+            if (value) this.width = parseInt(value);
+            this.addToConsole(`Width = ${this.width}`);
+        }, FCVAR_NONE, "Set canvas width");
+        this.RegisterConCommand("height", (value) => {
+            if (value) this.height = parseInt(value);
+            this.addToConsole(`Height = ${this.height}`);
+        }, FCVAR_NONE, "Set canvas height");
+        this.RegisterConCommand("bind", (key, ...commandParts) => {
+            if (commandParts.length > 0) {
+                const keyLower = key.toLowerCase();
+                const command = commandParts.join(' ').replace(/"/g, '');
+                this.keyBinds[keyLower] = command;
+                this.saveBinds();
+                this.addToConsole(`Bound ${keyLower} to "${command}"`);
+            } else {
+                this.addToConsole("Usage: bind <key> <command>");
+            }
+        }, FCVAR_NONE, "Bind a key to a command");
+        this.RegisterConCommand("unbind", (key) => {
+            if (key) {
+                const keyLower = key.toLowerCase();
+                if (this.keyBinds[keyLower]) {
+                    delete this.keyBinds[keyLower];
+                    this.saveBinds();
+                    this.addToConsole(`Unbound ${keyLower}`);
+                } else {
+                    this.addToConsole(`${keyLower} is not bound`);
+                }
+            } else {
+                this.addToConsole("Usage: unbind <key>");
+            }
+        }, FCVAR_NONE, "Unbind a key");
+        this.RegisterConCommand("bindlist", () => {
+            if (Object.keys(this.keyBinds).length === 0) {
+                this.addToConsole("No key binds");
+            } else {
+                Object.entries(this.keyBinds).forEach(([key, cmd]) => {
+                    this.addToConsole(`${key} = "${cmd}"`);
+                });
+            }
+        }, FCVAR_NONE, "List all key binds");
+        this.RegisterConCommand("toggledebug", () => this.debug = !this.debug, FCVAR_NONE, "Toggle debug display");
+        this.RegisterConCommand("toggleconsole", () => this.toggleConsole(), FCVAR_NONE, "Toggle console visibility");
+        this.RegisterConCommand("echo", (echo) => this.addToConsole(echo), FCVAR_NONE, "Echo to console");
+        this.RegisterConCommand("help", (command) => {
+            if (command) {
+                // Check if it's a command
+                if (this.conCommands[command]) {
+                    const cmd = this.conCommands[command];
+                    this.addToConsole(`${command}:`);
+                    this.addToConsole(cmd.help);
+                    return;
+                }
+                // Check if it's a convar
+                if (this.conVars[command]) {
+                    const cvar = this.conVars[command];
+                    this.addToConsole(`${command} = "${cvar.value}"`);
+                    this.addToConsole(`Default value: ${cvar.defaultValue}`)
+                    this.addToConsole(`Current value: ${cvar.value}`)
+                    return;
+                }
+                this.addToConsole(`Unknown command or variable: ${command}`);
+            } else {
+                this.addToConsole("Available commands:");
+                Object.keys(this.conCommands).forEach(cmd => {
+                    this.addToConsole(`  ${cmd} - ${this.conCommands[cmd].help}`);
+                });
+                this.addToConsole("Available variables:");
+                Object.keys(this.conVars).forEach(cvar => {
+                    this.addToConsole(`  ${cvar} - ${this.conVars[cvar].help}`);
+                });
+            }
+        }, FCVAR_NONE, "Get help with a command or list all commands");
         // 3D Camera
         this.camera = {
             position: new Vector(0, 0, -10),
@@ -116,6 +240,8 @@ class CRE {
             near: 0.01,
             far: 1000
         };
+
+        this.models = {}
 
         // Setup input
         window.addEventListener("keydown", e => {
@@ -130,6 +256,24 @@ class CRE {
         });
         window.addEventListener("keyup", e => {
             if (!this.consoleOpen) this.keys[e.key] = false;
+        });
+        
+        // Mouse capture and movement
+        this.canvas.addEventListener('click', () => {
+            if (!this.mouseCapture) {
+                this.canvas.requestPointerLock();
+            }
+        });
+        
+        document.addEventListener('pointerlockchange', () => {
+            this.mouseCapture = document.pointerLockElement === this.canvas;
+        });
+        
+        document.addEventListener('mousemove', e => {
+            if (this.mouseCapture && !this.consoleOpen) {
+                this.mouseDelta.x += e.movementX;
+                this.mouseDelta.y += e.movementY;
+            }
         });
 
         // Set fixed canvas size
@@ -165,16 +309,21 @@ class CRE {
                 SHARED: "SHARED"
             },
             ConVarFlags: {
-                NONE: CONVAR_NONE,
-                CHEAT: CONVAR_CHEAT,
-                REPLICATED: CONVAR_REPLICATED,
-                ARCHIVE: CONVAR_ARCHIVE,
-                NOTIFY: CONVAR_NOTIFY,
-                USERINFO: CONVAR_USERINFO,
-                PROTECTED: CONVAR_PROTECTED,
-                SPONLY: CONVAR_SPONLY,
-                DEMO: CONVAR_DEMO,
-                DONTRECORD: CONVAR_DONTRECORD
+                NONE: FCVAR_NONE,
+                CHEAT: FCVAR_CHEAT,
+                REPLICATED: FCVAR_REPLICATED,
+                ARCHIVE: FCVAR_ARCHIVE,
+                NOTIFY: FCVAR_NOTIFY,
+                USERINFO: FCVAR_USERINFO,
+                PROTECTED: FCVAR_PROTECTED,
+                SPONLY: FCVAR_SPONLY,
+                DEMO: FCVAR_DEMO,
+                DONTRECORD: FCVAR_DONTRECORD
+            },
+            DrawMode: {
+                CUBE: 0,
+                MODEL: 1,
+                SPHERE: 2,
             }
         };
 
@@ -195,7 +344,13 @@ class CRE {
         
         // Check registered commands first
         if (this.conCommands[command]) {
-            this.conCommands[command](...args);
+            const concommand = this.conCommands[command];
+            // Check if it's a cheat command and cheats are disabled
+            if (concommand.hasFlag(FCVAR_CHEAT) && !this.GetConVar("sv_cheats")) {
+                this.addToConsole(`Can't execute ${command}, cheats are not enabled.`);
+                return;
+            }
+            concommand.execute(...args);
             return;
         }
         
@@ -204,7 +359,7 @@ class CRE {
             if (args.length > 0) {
                 const convar = this.conVars[command];
                 // Check if it's a cheat convar and cheats are disabled
-                if (convar.hasFlag(CONVAR_CHEAT) && !this.GetConVar("sv_cheats")) {
+                if (convar.hasFlag(FCVAR_CHEAT) && !this.GetConVar("sv_cheats")) {
                     this.addToConsole(`Can't change ${command}, cheats are not enabled.`);
                     return;
                 }
@@ -216,79 +371,8 @@ class CRE {
             return;
         }
         
-        switch (command) {
-            case "ent_spawn":
-                this.SpawnEntity(args[0], ...args.slice(1));
-                break;
-            case "game_reset":
-                this.UTIL_RESET();
-                break;
-            case "ent_remove":
-                const entity = this.entities.find(e => e.name === args[0]);
-                if (entity) this.UTIL_REMOVE(entity);
-                break;
-            case "clear":
-                document.getElementById('console-output').textContent = '';
-                break;
-            case "map_load":
-                // crzgames
-                
-                fetch(`${this.base}${this.game}/maps/${args[0]}.map?v=${Date.now()}`)
-                    .then(r => r.json())
-                    .then(data => this.LoadMap(data))
-                    .catch(() => this.addToConsole(`Failed to load map: ${args[0]}`));
-                break;
-            case "width":
-                if (args[0]) this.width = parseInt(args[0]);
-                this.addToConsole(`Width = ${this.width}`);
-                break;
-            case "height":
-                if (args[0]) this.height = parseInt(args[0]);
-                this.addToConsole(`Height = ${this.height}`);
-                break;
-            case "bind":
-                if (args.length >= 2) {
-                    const key = args[0].toLowerCase();
-                    const command = args.slice(1).join(' ').replace(/"/g, '');
-                    this.keyBinds[key] = command;
-                    this.saveBinds();
-                    this.addToConsole(`Bound ${key} to "${command}"`);
-                } else {
-                    this.addToConsole("Usage: bind <key> <command>");
-                }
-                break;
-            case "unbind":
-                if (args[0]) {
-                    const key = args[0].toLowerCase();
-                    if (this.keyBinds[key]) {
-                        delete this.keyBinds[key];
-                        this.saveBinds();
-                        this.addToConsole(`Unbound ${key}`);
-                    } else {
-                        this.addToConsole(`${key} is not bound`);
-                    }
-                } else {
-                    this.addToConsole("Usage: unbind <key>");
-                }
-                break;
-            case "bindlist":
-                if (Object.keys(this.keyBinds).length === 0) {
-                    this.addToConsole("No key binds");
-                } else {
-                    Object.entries(this.keyBinds).forEach(([key, cmd]) => {
-                        this.addToConsole(`${key} = "${cmd}"`);
-                    });
-                }
-                break;
-            case "toggledebug":
-                this.debug = !this.debug;
-                break;
-            case "toggleconsole":
-                this.toggleConsole();
-                break;
-            default:
-                this.addToConsole(`Unknown command: ${command}`);
-        }
+        // Unknown command
+        this.addToConsole(`Unknown command: ${command}`);
     }
 
     addToConsole(text) {
@@ -336,8 +420,9 @@ class CRE {
     }
     
     // Register console command
-    RegisterConCommand(name, func) {
-        this.conCommands[name] = func;
+    RegisterConCommand(name, func, flags, help) {
+        this.conCommands[name] = new ConCommand(name, func, flags, help);
+        return this.conCommands[name];
     }
     
     // Register console variable
@@ -377,6 +462,106 @@ class CRE {
         });
         
         this.addToConsole(`Map loaded: ${mapData.name || 'Unnamed'}`);
+    }
+    
+    // Load model from JSON
+    LoadModel(name, modelPath) {
+        return fetch(`${this.base}${this.game}/models/${modelPath}.json?v=${Date.now()}`)
+            .then(r => r.json())
+            .then(data => {
+                const model = {
+                    objects: data.objects.map(obj => ({
+                        name: obj.name,
+                        vertices: obj.vertices.map(v => new Vector(v[0], v[1], v[2])),
+                        faces: obj.faces,
+                        normals: obj.normals?.map(n => new Vector(n[0], n[1], n[2])) || [],
+                        uvs: obj.uvs || []
+                    }))
+                };
+                if (this.debug) {
+                    this.addToConsole(`Model loaded: ${modelPath}`);
+                }
+                this.models[name] = model;
+                return model;
+            })
+            .catch(err => {
+                this.addToConsole(`Failed to load model: ${modelPath}`);
+                return null;
+            });
+    }
+    
+    // Render model
+    drawModel(model, transform, color = "#888") {
+        if (!model || !model.objects) return;
+        
+        model.objects.forEach(obj => {
+            obj.faces.forEach(face => {
+                if (face.length >= 3) {
+                    // Fan triangulation for any polygon
+                    for (let i = 1; i < face.length - 1; i++) {
+                        const v1Idx = face[0][0] - 1;
+                        const v2Idx = face[i][0] - 1;
+                        const v3Idx = face[i + 1][0] - 1;
+                        
+                        if (v1Idx >= 0 && v2Idx >= 0 && v3Idx >= 0 && 
+                            v1Idx < obj.vertices.length && v2Idx < obj.vertices.length && v3Idx < obj.vertices.length) {
+                            
+                            const v1 = this.transformVertex(obj.vertices[v1Idx], transform);
+                            const v2 = this.transformVertex(obj.vertices[v2Idx], transform);
+                            const v3 = this.transformVertex(obj.vertices[v3Idx], transform);
+                            
+                            // Calculate lighting like cubes
+                            const ab = v2.subtract(v1);
+                            const ac = v3.subtract(v1);
+                            const worldNormal = ab.cross(ac).normalize();
+                            const lightDir = new Vector(0.5, -1, 0.3).normalize();
+                            const lightDot = worldNormal.dot(lightDir);
+                            const shade = Math.max(0.3, Math.abs(lightDot));
+                            
+                            this.renderQueue.push({
+                                type: 'triangle',
+                                verts: [v1, v2, v3],
+                                color: color,
+                                shade
+                            });
+                        }
+                    }
+                }
+            });
+        });
+    }
+    
+    // Transform vertex by transform matrix
+    transformVertex(vertex, transform) {
+        // Apply scale first
+        let v = new Vector(
+            vertex.x * transform.scale.x,
+            vertex.y * transform.scale.y,
+            vertex.z * transform.scale.z
+        );
+        
+        // Apply rotation (negated to match expected direction)
+        const yaw = -transform.rotation.y * Math.PI / 180;
+        const pitch = -transform.rotation.x * Math.PI / 180;
+        
+        // Rotate around Y axis (yaw)
+        const cosY = Math.cos(yaw);
+        const sinY = Math.sin(yaw);
+        const x1 = v.x * cosY - v.z * sinY;
+        const z1 = v.x * sinY + v.z * cosY;
+        
+        // Rotate around X axis (pitch)
+        const cosX = Math.cos(pitch);
+        const sinX = Math.sin(pitch);
+        const y2 = v.y * cosX - z1 * sinX;
+        const z2 = v.y * sinX + z1 * cosX;
+        
+        // Apply position
+        return new Vector(
+            x1 + transform.position.x,
+            y2 + transform.position.y,
+            z2 + transform.position.z
+        );
     }
     
     // Auto-load map function for game code
@@ -462,14 +647,14 @@ class CRE {
         const pitch = this.camera.rotation.x * Math.PI / 180;
         
         // Rotate around Y axis (yaw)
-        const cosY = Math.cos(-yaw);
-        const sinY = Math.sin(-yaw);
+        const cosY = Math.cos(yaw);
+        const sinY = Math.sin(yaw);
         const x1 = d.x * cosY - d.z * sinY;
         const z1 = d.x * sinY + d.z * cosY;
         
         // Rotate around X axis (pitch)
-        const cosX = Math.cos(-pitch);
-        const sinX = Math.sin(-pitch);
+        const cosX = Math.cos(pitch);
+        const sinX = Math.sin(pitch);
         const y2 = d.y * cosX - z1 * sinX;
         const z2 = d.y * sinX + z1 * cosX;
         
@@ -560,13 +745,13 @@ class CRE {
         const yaw = this.camera.rotation.y * Math.PI / 180;
         const pitch = this.camera.rotation.x * Math.PI / 180;
         
-        const cosY = Math.cos(-yaw);
-        const sinY = Math.sin(-yaw);
+        const cosY = Math.cos(yaw);
+        const sinY = Math.sin(yaw);
         const x1 = d.x * cosY - d.z * sinY;
         const z1 = d.x * sinY + d.z * cosY;
         
-        const cosX = Math.cos(-pitch);
-        const sinX = Math.sin(-pitch);
+        const cosX = Math.cos(pitch);
+        const sinX = Math.sin(pitch);
         const y2 = d.y * cosX - z1 * sinX;
         const z2 = d.y * sinX + z1 * cosX;
         
@@ -574,18 +759,31 @@ class CRE {
     }
     
     drawTriangle3D(v1, v2, v3, color = "white", shading = 1) {
-        // clipTriangle now returns an ARRAY OF TRIANGLES
-        // each triangle = [{x,y,z},{x,y,z},{x,y,z}]
+        // Backface culling in camera space
+        const ca = this.toCameraSpace(v1);
+        const cb = this.toCameraSpace(v2);
+        const cc = this.toCameraSpace(v3);
+        
+        const abx = cb.x - ca.x, aby = cb.y - ca.y, abz = cb.z - ca.z;
+        const acx = cc.x - ca.x, acy = cc.y - ca.y, acz = cc.z - ca.z;
+        const normalX = aby * acz - abz * acy;
+        const normalY = abz * acx - abx * acz;
+        const normalZ = abx * acy - aby * acx;
+        
+        const centerX = (ca.x + cb.x + cc.x) / 3;
+        const centerY = (ca.y + cb.y + cc.y) / 3;
+        const centerZ = (ca.z + cb.z + cc.z) / 3;
+        
+        const dot = normalX * (-centerX) + normalY * (-centerY) + normalZ * (-centerZ);
+        if (dot <= 0) return; // Skip back-facing triangles
+        
         const clippedTris = this.clipTriangle(v1, v2, v3);
-
         if (!clippedTris || clippedTris.length === 0) return;
 
-        // Precompute projection constants
         const cx = this.canvas.width / 2;
         const cy = this.canvas.height / 2;
         const f = cx / Math.tan(this.camera.fov * Math.PI / 360);
 
-        // Apply shading
         let shadedColor = color;
         if (color.startsWith('#')) {
             const clamp = v => Math.max(0, Math.min(255, v));
@@ -599,7 +797,6 @@ class CRE {
         this.ctx.strokeStyle = shadedColor;
         this.ctx.lineWidth = 1;
 
-        // Draw each resulting triangle
         for (const tri of clippedTris) {
             const projected = tri.map(v => ({
                 x: cx + (v.x * f) / v.z,
@@ -711,21 +908,15 @@ class CRE {
                 const dot = normalX * viewX + normalY * viewY + normalZ * viewZ;
                 
                 // Only render front-facing triangles
-                if (dot < 0) {
-                    const ca = this.toCameraSpace(a);
-                    const cb = this.toCameraSpace(b);
-                    const cc = this.toCameraSpace(c);
-
-                    const minZ = Math.min(ca.z, cb.z, cc.z);
-                    const maxZ = Math.max(ca.z, cb.z, cc.z);
+                if (dot > 0) {
+                    const centroidZ = (ca.z + cb.z + cc.z) / 3;
 
                     this.renderQueue.push({
                         type: 'triangle',
                         verts: [a, b, c],
                         color: "#888888",
                         shade,
-                        minZ,
-                        maxZ
+                        centroidZ
                     });
                 }
             }
@@ -745,7 +936,13 @@ class CRE {
 
         // Update entities
         this.entities.forEach(ent => {
-            if (ent.update) ent.update(dt, this);
+            if (ent.update) {
+                try {
+                    ent.update(dt, this);
+                } catch (e) {
+                    if (!gameHalted) showError(e);
+                }
+            }
         });
 
         // Clear and prepare render queue
@@ -788,18 +985,16 @@ class CRE {
                         
                         const dot = normalX * (-centerX) + normalY * (-centerY) + normalZ * (-centerZ);
                         
-                        if (dot < 0) {
+                        if (dot > 0) {
                             
-                            const minZ = Math.min(ca.z, cb.z, cc.z);
-                            const maxZ = Math.max(ca.z, cb.z, cc.z);
+                            const centroidZ = (ca.z + cb.z + cc.z) / 3;
 
                             this.renderQueue.push({
                                 type: 'triangle',
                                 verts: [v1, v2, v3],
                                 color: brush.texture,
                                 shade,
-                                minZ,
-                                maxZ
+                                centroidZ
                             });
                         }
                     }
@@ -809,26 +1004,33 @@ class CRE {
         
         // Add 3D entities to render queue
         this.entities.forEach(ent => {
-            if (ent.transform) {
-                this.drawCube3D(ent.transform);
-            } else if (ent.draw) {
-                ent.draw(this.ctx);
+            if (!(ent.CRE.drawmode)) {return;};
+            if (!(ent.CRE.transform)) {return;};
+            if (ent.CRE.drawmode === this.Enums.DrawMode.CUBE) {
+                this.drawCube3D(ent.CRE.transform);
+            } else if (ent.CRE.drawmode === this.Enums.DrawMode.MODEL) {
+                if (!(ent.CRE.model)) {return;}
+                const color = "#aaa"
+                //if (ent.CRE.color) {
+                //    color = String(ent.CRE.color);
+                //}
+                const model = this.getModel(ent.CRE.model);
+                if (model) this.drawModel(model, ent.CRE.transform, color);
             }
         });
         
-        // Sort by Z depth with intersection handling
-        this.renderQueue.sort((a, b) => {
-            if (a.minZ >= b.maxZ) return -1;
-            if (b.minZ >= a.maxZ) return 1;
-            
-            // Check for triangle intersection
-            if (this.trianglesIntersect(a, b)) {
-                return this.compareIntersectingTriangles(a, b);
+        // Add centroid Z to all triangles for sorting
+        this.renderQueue.forEach(item => {
+            if (item.type === 'triangle') {
+                const ca = this.toCameraSpace(item.verts[0]);
+                const cb = this.toCameraSpace(item.verts[1]);
+                const cc = this.toCameraSpace(item.verts[2]);
+                item.centroidZ = (ca.z + cb.z + cc.z) / 3;
             }
-            
-            return b.maxZ - a.maxZ;
         });
-
+        
+        // Sort by centroid Z depth (back to front)
+        this.renderQueue.sort((a, b) => b.centroidZ - a.centroidZ);
         
         this.renderQueue.forEach(item => {
             if (item.type === 'triangle') {
@@ -840,6 +1042,10 @@ class CRE {
         this.drawGUI();
 
         requestAnimationFrame(this.gameLoop.bind(this));
+    }
+
+    getModel(modelname) {
+        return this.models[modelname] || null; 
     }
     
     trianglesIntersect(a, b) {
@@ -892,42 +1098,36 @@ class CRE {
 }
 class Transform {
     constructor() {
-        this.position = { x: 0, y: 0, z: 0 };
-        this.rotation = { x: 0, y: 0, z: 0 };
-        this.scale = { x: 1, y: 1, z: 1 };
+        this.position = new Vector(0, 0, 0);
+        this.rotation = new Vector(0, 0, 0);
+        this.scale = new Vector(1, 1, 1);
     }
     getPosition() { return this.position; }
-    setPosition(x, y, z) { this.position = { x, y, z }; }
+    setPosition(x, y, z) { this.position = new Vector(x, y, z); }
     getRotation() { return this.rotation; }
-    setRotation(x, y, z) { this.rotation = { x, y, z }; }
+    setRotation(x, y, z) { this.rotation = new Vector(x, y, z); }
     getScale() { return this.scale; }
-    setScale(x, y, z) { this.scale = { x, y, z }; }
-    // Add other methods that might be useful
+    setScale(x, y, z) { this.scale = new Vector(x, y, z); }
     getForwardVector() {
         const yaw = this.rotation.y * Math.PI / 180;
         const pitch = this.rotation.x * Math.PI / 180;
-
-        return {
-            x: Math.sin(yaw) * Math.cos(pitch),
-            y: -Math.sin(pitch),
-            z: Math.cos(yaw) * Math.cos(pitch)
-        };
+        return new Vector(
+            Math.sin(yaw) * Math.cos(pitch),
+            -Math.sin(pitch),
+            Math.cos(yaw) * Math.cos(pitch)
+        );
     }
-
     getRightVector() {
         const yaw = this.rotation.y * Math.PI / 180;
-
-        return {
-            x: Math.cos(yaw),
-            y: 0,
-            z: -Math.sin(yaw)
-        };
+        return new Vector(
+            Math.cos(yaw),
+            0,
+            -Math.sin(yaw)
+        );
     }
-
     getUpVector() {
-        return { x: 0, y: 1, z: 0 };
+        return new Vector(0, 1, 0);
     }
-
 }
 class Vector {
     constructor(x = 0, y = 0, z = 0) {
@@ -973,25 +1173,34 @@ class Vector {
         if (len === 0) return new Vector(0, 0, 0);
         return this.divide(len);
     }
+
+    average() {
+        return (this.x + this.y + this.z) / 3
+    }
+
+    distance(v) {
+        return Math.sqrt((this.x - v.x) ** 2 + (this.y - v.y) ** 2 + (this.z - v.z) ** 2);
+    }
 }
 // ConVar flags
-const CONVAR_NONE = 0;
-const CONVAR_CHEAT = 1;
-const CONVAR_REPLICATED = 2;
-const CONVAR_ARCHIVE = 4;
-const CONVAR_NOTIFY = 8;
-const CONVAR_USERINFO = 16;
-const CONVAR_PROTECTED = 32;
-const CONVAR_SPONLY = 64;
-const CONVAR_DEMO = 128;
-const CONVAR_DONTRECORD = 256;
+const FCVAR_NONE = 0;
+const FCVAR_CHEAT = 1;
+const FCVAR_REPLICATED = 2;
+const FCVAR_ARCHIVE = 4;
+const FCVAR_NOTIFY = 8;
+const FCVAR_USERINFO = 16;
+const FCVAR_PROTECTED = 32;
+const FCVAR_SPONLY = 64;
+const FCVAR_DEMO = 128;
+const FCVAR_DONTRECORD = 256;
 
 class ConVar {
     constructor(name, defaultValue, flags, help) {
         this.name = name;
         this.value = defaultValue;
-        this.flags = flags || CONVAR_NONE;
+        this.flags = flags || FCVAR_NONE;
         this.help = help || "";
+        this.defaultValue = defaultValue || "0";
     }
     
     hasFlag(flag) {
@@ -1007,6 +1216,23 @@ class ConVar {
         return this.value === '1' || this.value.toLowerCase() === 'true';
     }
     
+}
+
+class ConCommand {
+    constructor(name, func, flags, help) {
+        this.name = name;
+        this.func = func;
+        this.flags = flags || FCVAR_NONE;
+        this.help = help || "";
+    }
+    hasFlag(flag) {
+        return (this.flags & flag) !== 0;
+    }
+    execute(...args) {
+        if (this.func) {
+            this.func(...args);
+        }
+    }
 }
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -1026,14 +1252,101 @@ if (document.referrer.includes("crz.games")) {
     cre.base = "uploads/games/";
 }
 
+let gameHalted = false;
+let gameCode = null;
+
+function showError(error) {
+    const popup = document.getElementById('errorPopup');
+    popup.innerHTML = `
+        <h3>Runtime Error</h3>
+        <pre>${error.message}\n${error.stack}</pre>
+        <div>
+            <button onclick="continueGame()">Continue</button>
+            <button onclick="restartGame()">Restart</button>
+            <button onclick="haltGame()">Halt</button>
+        </div>
+    `;
+    popup.style.display = 'block';
+}
+
+function continueGame() {
+    document.getElementById('errorPopup').style.display = 'none';
+    gameHalted = false;
+}
+
+function restartGame() {
+    document.getElementById('errorPopup').style.display = 'none';
+    gameHalted = false;
+    cre.UTIL_RESET();
+    if (gameCode) {
+        try {
+            new Function("CRE", gameCode)(cre);
+        } catch (e) {
+            showError(e);
+        }
+    }
+}
+
+function haltGame() {
+    gameHalted = true;
+    document.getElementById('errorPopup').style.display = 'none';
+}
+
+window.onerror = (msg, file, line, col, error) => {
+    if (!gameHalted) showError(error || new Error(msg));
+    return true;
+};
+
+window.addEventListener('unhandledrejection', e => {
+    if (!gameHalted) showError(e.reason);
+});
+
 fetch(`${baseURL}${gameName}/bin/client.cre?v=${Date.now()}`)
   .then(r => r.text())
-  .then(code => new Function("CRE", code)(cre))
+  .then(code => {
+    gameCode = code;
+    const firstLine = code.split('\n')[0];
+    
+    if (!firstLine.startsWith('//{"META":')) {
+        cre.Msg("No meta tag");
+        try {
+            new Function("CRE", code)(cre);
+        } catch (e) {
+            showError(e);
+        }
+        return;
+    }
+    
+    try {
+        const metaJson = firstLine.substring(2);
+        const meta = JSON.parse(metaJson);
+        
+        if (meta.META && meta.META.version && meta.META.version !== cre.version) {
+            if (confirm(`Wrong version, do you want to try anyway?`)) {
+                new Function("CRE", code)(cre);
+            }
+        } else {
+            new Function("CRE", code)(cre);
+        }
+    } catch (e) {
+        if (e.name === 'SyntaxError') {
+            cre.Msg("Invalid meta tag format");
+        }
+        showError(e);
+    }
+  })
   .catch(() => {
     cre.Msg(`Failed to load ${gameName}/bin/client.cre, loading default game.cre`);
     return fetch(`game.cre?v=${Date.now()}`)
       .then(r => r.text())
-      .then(code => new Function("CRE", code)(cre));
+      .then(code => {
+        gameCode = code;
+        try {
+            new Function("CRE", code)(cre);
+        } catch (e) {
+            showError(e);
+        }
+      });
   }); 
 // Console toggle and input handling
 
@@ -1044,7 +1357,7 @@ let selectedSuggestionIndex = 0;
 consoleInput.addEventListener('input', e => {
     const input = e.target.value;
     if (input.length > 0) {
-        const allCommands = [...Object.keys(cre.conCommands), ...Object.keys(cre.conVars), 'ent_spawn', 'game_reset', 'ent_remove', 'clear', 'map_load', 'width', 'height', 'bind', 'unbind', 'bindlist', 'toggledebug'];
+        const allCommands = [...Object.keys(cre.conCommands), ...Object.keys(cre.conVars)];
         const matches = allCommands.filter(cmd => cmd.startsWith(input)).slice(0, 5);
         
         if (matches.length > 0) {
