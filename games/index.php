@@ -108,6 +108,7 @@ $mapStatusToLabel = [
     </style>
 </head>
 <body>
+    <?php include 'includes/banner.php'; ?>
     <div class="nav-links">
         <?php if ($current_user): ?>
             <a href="dashboard.php" class="nav-link">My Games</a>

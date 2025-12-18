@@ -194,6 +194,39 @@ body {
     color: #c7d5e0;
 }
 
+.site-banner {
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    border-radius: 6px;
+    font-weight: 500;
+    text-align: center;
+}
+
+.banner-info {
+    background: #1976d2;
+    color: white;
+}
+
+.banner-warning {
+    background: #f57c00;
+    color: white;
+}
+
+.banner-error {
+    background: #d32f2f;
+    color: white;
+}
+
+.banner-success {
+    background: #388e3c;
+    color: white;
+}
+
+.banner-content {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
 @media (max-width: 768px) {
     .game-content {
         grid-template-columns: 1fr;

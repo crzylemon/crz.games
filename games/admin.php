@@ -18,6 +18,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'reject') {
         $stmt = $pdo->prepare("UPDATE games SET status = 'DRAFT' WHERE id = ?");
         $stmt->execute([$game_id]);
+    } elseif ($action === 'update_banner') {
+        $banner_text = $_POST['banner_text'] ?? '';
+        $banner_type = $_POST['banner_type'] ?? 'info';
+        $banner_enabled = isset($_POST['banner_enabled']) ? 1 : 0;
+        
+        // Create site_settings table if it doesn't exist
+        $pdo->exec("CREATE TABLE IF NOT EXISTS site_settings (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            setting_key VARCHAR(255) UNIQUE,
+            setting_value TEXT
+        )");
+        
+        $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        $stmt->execute(['banner_text', $banner_text]);
+        $stmt->execute(['banner_type', $banner_type]);
+        $stmt->execute(['banner_enabled', $banner_enabled]);
     }
     
     header('Location: admin.php');
@@ -28,6 +44,19 @@ try {
     $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.status = 'PENDING_APPROVAL' ORDER BY g.created_at ASC");
     $stmt->execute();
     $pending_games = $stmt->fetchAll();
+    
+    // Get current banner settings
+    $banner_text = '';
+    $banner_type = 'info';
+    $banner_enabled = 0;
+    
+    $stmt = $pdo->prepare("SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('banner_text', 'banner_type', 'banner_enabled')");
+    $stmt->execute();
+    $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+    
+    $banner_text = $settings['banner_text'] ?? '';
+    $banner_type = $settings['banner_type'] ?? 'info';
+    $banner_enabled = $settings['banner_enabled'] ?? 0;
 } catch (PDOException $e) {
     die("Error: " . $e->getMessage());
 }
@@ -97,6 +126,41 @@ try {
             padding: 8px 16px;
             border-radius: 4px;
         }
+        .banner-section {
+            background: #1e2329;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-label {
+            display: block;
+            color: #66c0f4;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 8px;
+            background: #16202d;
+            border: 1px solid #3c4043;
+            border-radius: 4px;
+            color: #c7d5e0;
+        }
+        .form-textarea {
+            height: 80px;
+            resize: vertical;
+        }
+        .update-btn {
+            background: #2a5298;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -105,6 +169,32 @@ try {
         <div class="admin-header">
             <h1>Admin Panel</h1>
             <p>Manage game approvals and site administration</p>
+        </div>
+
+        <div class="banner-section">
+            <h2>Site Banner</h2>
+            <form method="POST">
+                <div class="form-group">
+                    <label class="form-label">
+                        <input type="checkbox" name="banner_enabled" <?= $banner_enabled ? 'checked' : '' ?>>
+                        Enable Site Banner
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="banner_text">Banner Text</label>
+                    <textarea id="banner_text" name="banner_text" class="form-textarea" placeholder="Enter banner message..."><?= htmlspecialchars($banner_text) ?></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="banner_type">Banner Type</label>
+                    <select id="banner_type" name="banner_type" class="form-select">
+                        <option value="info" <?= $banner_type === 'info' ? 'selected' : '' ?>>Info (Blue)</option>
+                        <option value="warning" <?= $banner_type === 'warning' ? 'selected' : '' ?>>Warning (Orange)</option>
+                        <option value="error" <?= $banner_type === 'error' ? 'selected' : '' ?>>Error (Red)</option>
+                        <option value="success" <?= $banner_type === 'success' ? 'selected' : '' ?>>Success (Green)</option>
+                    </select>
+                </div>
+                <button type="submit" name="action" value="update_banner" class="update-btn">Update Banner</button>
+            </form>
         </div>
 
         <h2>Pending Game Approvals (<?= count($pending_games) ?>)</h2>

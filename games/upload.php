@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // If not admin and trying to set to PLAYABLE, set to PENDING_APPROVAL instead
     if ($user['id'] != 1 && $status === 'PLAYABLE') {
-        $status = 'PENDING_APPROVAL';
+        $status = 'PENDING_APPROVAL_P';
     }
     $whitelist_visibility = isset($_POST['whitelist_visibility']) ? 1 : 0;
     $whitelist_play = isset($_POST['whitelist_play']) ? 1 : 0;
@@ -35,9 +35,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Handle file uploads
         if ($hosting_type === 'ZIP' && isset($_FILES['game_file'])) {
-            $upload_dir = "uploads/games/$game_id/";
-            if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
-            move_uploaded_file($_FILES['game_file']['tmp_name'], $upload_dir . 'game.zip');
+            if ($_FILES['game_file']['error'] === UPLOAD_ERR_OK) {
+                // Ensure parent directory exists
+                if (!is_dir('uploads/games')) {
+                    mkdir('uploads/games', 0777, true);
+                }
+                
+                $upload_dir = "uploads/games/$game_id/";
+                if (!is_dir($upload_dir)) {
+                    if (!mkdir($upload_dir, 0777, true)) {
+                        throw new Exception("Failed to create upload directory: $upload_dir");
+                    }
+                }
+                
+                $target_file = $upload_dir . 'game.zip';
+                if (!move_uploaded_file($_FILES['game_file']['tmp_name'], $target_file)) {
+                    throw new Exception("Failed to move uploaded file. Check directory permissions for: $upload_dir");
+                }
+                
+                // Extract the ZIP file
+                $zip = new ZipArchive();
+                if ($zip->open($target_file) === TRUE) {
+                    $zip->extractTo($upload_dir);
+                    $zip->close();
+                    // Remove the ZIP file after extraction
+                    unlink($target_file);
+                } else {
+                    throw new Exception("Failed to extract ZIP file");
+                }
+            } else {
+                throw new Exception("File upload error: " . $_FILES['game_file']['error']);
+            }
+        } elseif ($hosting_type === 'ZIP') {
+            throw new Exception("No game file uploaded");
         }
         
         // Handle thumbnails
@@ -59,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         header('Location: game.php?slug=' . urlencode($slug));
         exit;
-    } catch (PDOException $e) {
+    } catch (Exception $e) {
         $error = "Error: " . $e->getMessage();
     }
 }

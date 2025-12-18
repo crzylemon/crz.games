@@ -134,6 +134,7 @@ $mapStatusToLabel = [
     </style>
 </head>
 <body>
+    <?php include 'includes/banner.php'; ?>
     <button onclick="window.location.href='index.php'" style="position: fixed; top: 20px; right: 20px; background: #2a5298; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; z-index: 1000;">← Back to Games</button>
     <div class="container">
         <div class="profile-header">
