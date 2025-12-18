@@ -13,11 +13,15 @@ try {
     $stmt->execute([$user['id']]);
     $user_games = $stmt->fetchAll();
 
+
 $mapStatusToLabel = [
     'PLAYABLE' => '[HideMe]',
     'PUBLIC_UNPLAYABLE' => 'Non-playable',
     'DRAFT' => 'Draft',
     'WHITELISTED' => 'Whitelisted',
+    'PENDING_APPROVAL_P' => 'Pending Approval (Playable)',
+    "PENDING_APPROVAL_PU" => 'Pending Approval (Non-playable)',
+    'REJECT' => 'Rejected',
 ];
 } catch (PDOException $e) {
     die("Error: " . $e->getMessage());
@@ -96,6 +100,10 @@ $mapStatusToLabel = [
             background: #757575;
             color: white;
         }
+        .status-pending_approval {
+            background: #ff9800;
+            color: white;
+        }
         .actions {
             display: flex;
             gap: 8px;
@@ -133,6 +141,9 @@ $mapStatusToLabel = [
             <div>
                 <h1 class="game-title">My Games</h1>
                 <div class="game-genre">Manage your uploaded games</div>
+                <!-- link to crengine utils (/crengine_utils) -->
+                <a href="crengine_utils" class="upload-btn" style="display: inline-block; margin-top: 20px;">CRENGINE Utils</a>
+                
             </div>
             <a href="upload.php" class="upload-btn">+ Upload New Game</a>
         </div>

@@ -17,6 +17,9 @@ $mapStatusToLabel = [
     'PUBLIC_UNPLAYABLE' => 'Non-playable',
     'DRAFT' => 'Draft',
     'WHITELISTED' => 'Whitelisted',
+    'PENDING_APPROVAL_P' => 'Pending Approval (Playable)',
+    "PENDING_APPROVAL_PU" => 'Pending Approval (Non-playable)',
+    'REJECT' => 'Rejected',
 ];
 ?>
 <!DOCTYPE html>

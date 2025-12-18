@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<body>
+<a href="/games/dashboard.php">Dashboard</a>
+<input type="file" id="file" accept=".obj">
+<br><br>
+<div id="objectSettings"></div>
+<br>
+<h3>Bones & Animations</h3>
+<button onclick="addBone()">Add Bone</button>
+<div id="boneSettings"></div>
+<br>
+<button onclick="addAnimation()">Add Animation</button>
+<div id="animationSettings"></div>
+<br>
+<textarea
+    id="out"
+    style="width:100%; height:300px; font-family:monospace;"
+    readonly
+    spellcheck="false"
+    placeholder="Bundled .json output will appear here. Ctrl+A → Ctrl+C">
+</textarea>
+
+<script>
+document.getElementById("file").onchange = async e => {
+  const text = await e.target.files[0].text();
+  const data = parseOBJ(text);
+  createObjectSettings(data.objects);
+  updateOutput();
+};
+
+let bones = [];
+let animations = [];
+
+function createObjectSettings(objects) {
+  const container = document.getElementById("objectSettings");
+  container.innerHTML = objects.map(obj => `
+    <div style="border:1px solid #ccc; padding:10px; margin:5px;">
+      <h4>${obj.name}</h4>
+      <label>Material: <select id="mat_${obj.name}">
+        <option value="default">Default</option>
+        <option value="emissive">Emissive</option>
+        <option value="metallic">Metallic</option>
+      </select></label><br>
+      <label>Color: <input type="color" id="col_${obj.name}" value="#888888"></label><br>
+      <label>Texture: <input type="text" id="tex_${obj.name}" placeholder="texture.png"></label><br>
+      <label>Parent Bone: <input type="text" id="parent_${obj.name}" placeholder="bone_name"></label><br>
+      <label>Position Offset: <input type="text" id="pos_${obj.name}" value="0,0,0" placeholder="x,y,z"></label><br>
+      <label>Rotation Offset: <input type="text" id="rot_${obj.name}" value="0,0,0" placeholder="x,y,z"></label><br>
+      <label>Scale Offset: <input type="text" id="scale_${obj.name}" value="1,1,1" placeholder="x,y,z"></label>
+    </div>
+  `).join('');
+  
+  // Add change listeners
+  objects.forEach(obj => {
+    ['mat_', 'col_', 'tex_', 'parent_', 'pos_', 'rot_', 'scale_'].forEach(prefix => {
+      const el = document.getElementById(prefix + obj.name);
+      if (el) el.onchange = updateOutput;
+    });
+  });
+}
+
+function addBone() {
+  const name = prompt('Bone name:');
+  if (!name) return;
+  bones.push({ name });
+  updateBoneSettings();
+  updateOutput();
+}
+
+function updateBoneSettings() {
+  const container = document.getElementById('boneSettings');
+  container.innerHTML = bones.map((bone, i) => `
+    <div style="border:1px solid #999; padding:5px; margin:3px;">
+      <b>${bone.name}</b>
+      <button onclick="bones.splice(${i}, 1); updateBoneSettings(); updateOutput();">Remove</button>
+    </div>
+  `).join('');
+}
+
+function addAnimation() {
+  const name = prompt('Animation name:');
+  if (!name) return;
+  animations.push({ name, duration: 1, loop: false, bones: {} });
+  updateAnimationSettings();
+  updateOutput();
+}
+
+function updateAnimationSettings() {
+  const container = document.getElementById('animationSettings');
+  container.innerHTML = animations.map((anim, i) => `
+    <div style="border:1px solid #999; padding:5px; margin:3px;">
+      <b>${anim.name}</b>
+      <label>Duration: <input type="number" value="${anim.duration}" step="0.1" onchange="animations[${i}].duration = +this.value; updateOutput();"></label>
+      <label>Loop: <input type="checkbox" ${anim.loop ? 'checked' : ''} onchange="animations[${i}].loop = this.checked; updateOutput();"></label>
+      <button onclick="addKeyframe(${i})">Add Keyframe</button>
+      <button onclick="animations.splice(${i}, 1); updateAnimationSettings(); updateOutput();">Remove</button>
+      <div id="keyframes_${i}"></div>
+    </div>
+  `).join('');
+}
+
+function addKeyframe(animIdx) {
+  const boneName = prompt('Bone name:');
+  if (!boneName) return;
+  const time = parseFloat(prompt('Time:', '0'));
+  const pos = prompt('Position (x,y,z):', '0,0,0').split(',').map(Number);
+  const rot = prompt('Rotation (x,y,z):', '0,0,0').split(',').map(Number);
+  
+  if (!animations[animIdx].bones[boneName]) {
+    animations[animIdx].bones[boneName] = { keyframes: [] };
+  }
+  
+  animations[animIdx].bones[boneName].keyframes.push({
+    time,
+    position: pos,
+    rotation: rot
+  });
+  
+  updateAnimationSettings();
+  updateOutput();
+}
+
+function updateOutput() {
+  const fileInput = document.getElementById("file");
+  if (!fileInput.files[0]) return;
+  
+  fileInput.files[0].text().then(text => {
+    const data = parseOBJ(text);
+    document.getElementById("out").textContent = JSON.stringify(data, null, 2);
+  });
+}
+
+function parseOBJ(text) {
+  const lines = text.split("\n");
+  const globalVertices = [];
+  const globalUvs = [];
+  const globalNormals = [];
+  const objects = [];
+  let currentObject = null;
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const parts = line.split(/\s+/);
+
+    switch (parts[0]) {
+      case "o":
+        // Start a new object
+        if (currentObject) objects.push(currentObject);
+        currentObject = {
+          name: parts[1],
+          faces: []
+        };
+        break;
+      case "v":
+        globalVertices.push(parts.slice(1).map(Number));
+        break;
+      case "vt":
+        globalUvs.push(parts.slice(1).map(Number));
+        break;
+      case "vn":
+        globalNormals.push(parts.slice(1).map(Number));
+        break;
+      case "f":
+        // Blender OBJ uses global indices
+        if (currentObject) {
+          currentObject.faces.push(
+            parts.slice(1).map(v => v.split("/").map(n => +n || 0))
+          );
+        }
+        break;
+    }
+  }
+
+  if (currentObject) objects.push(currentObject);
+  
+  // Add global arrays and per-object settings
+  objects.forEach(obj => {
+    obj.vertices = globalVertices;
+    obj.uvs = globalUvs;
+    obj.normals = globalNormals;
+    
+    const matEl = document.getElementById(`mat_${obj.name}`);
+    const colEl = document.getElementById(`col_${obj.name}`);
+    const texEl = document.getElementById(`tex_${obj.name}`);
+    const parentEl = document.getElementById(`parent_${obj.name}`);
+    const posEl = document.getElementById(`pos_${obj.name}`);
+    const rotEl = document.getElementById(`rot_${obj.name}`);
+    const scaleEl = document.getElementById(`scale_${obj.name}`);
+    
+    if (matEl && matEl.value !== "default") obj.material = matEl.value;
+    if (colEl && colEl.value !== "#888888") obj.color = colEl.value;
+    if (texEl && texEl.value) obj.texture = texEl.value;
+    if (parentEl && parentEl.value) obj.parent = parentEl.value;
+    
+    obj.transform = {
+      position: posEl ? posEl.value.split(',').map(Number) : [0,0,0],
+      rotation: rotEl ? rotEl.value.split(',').map(Number) : [0,0,0],
+      scale: scaleEl ? scaleEl.value.split(',').map(Number) : [1,1,1]
+    };
+  });
+  
+  const result = { objects };
+  
+  if (bones.length > 0) {
+    result.bones = {};
+    bones.forEach(bone => {
+      result.bones[bone.name] = {};
+    });
+  }
+  
+  if (animations.length > 0) {
+    result.animations = {};
+    animations.forEach(anim => {
+      result.animations[anim.name] = {
+        duration: anim.duration,
+        loop: anim.loop,
+        bones: anim.bones
+      };
+    });
+  }
+  
+  return result;
+}
+</script>
+</body>
+</html>

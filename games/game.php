@@ -29,7 +29,15 @@ $mapStatusToLabel = [
     'PUBLIC_UNPLAYABLE' => 'Non-playable',
     'DRAFT' => 'Draft',
     'WHITELISTED' => 'Whitelisted',
+    'PENDING_APPROVAL_P' => 'Pending Approval (Playable)',
+    "PENDING_APPROVAL_PU" => 'Pending Approval (Non-playable)',
+    'REJECT' => 'Rejected',
 ];
+// Check if user can view this game
+if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' || ($user && ($user['id'] === 1 || $user['id'] === $game['owner_user_id'])))) {
+    header('Location: /games/');
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

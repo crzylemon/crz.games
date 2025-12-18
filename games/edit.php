@@ -24,20 +24,54 @@ try {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $title = $_POST['title'] ?? '';
-    $description = $_POST['description'] ?? '';
-    $genre = $_POST['genre'] ?? '';
-    $status = $_POST['status'] ?? 'DRAFT';
-    $current_version = $_POST['current_version'] ?? '0.1.0';
-    
-    try {
-        $stmt = $pdo->prepare("UPDATE games SET title = ?, description = ?, genre = ?, status = ?, current_version = ? WHERE id = ? AND owner_user_id = ?");
-        $stmt->execute([$title, $description, $genre, $status, $current_version, $game_id, $user['id']]);
+    if (isset($_POST['delete'])) {
+        try {
+            $stmt = $pdo->prepare("DELETE FROM games WHERE id = ? AND owner_user_id = ?");
+            $stmt->execute([$game_id, $user['id']]);
+            
+            // Delete game files
+            $upload_dir = "uploads/games/$game_id/";
+            if (is_dir($upload_dir)) {
+                array_map('unlink', glob("$upload_dir*"));
+                rmdir($upload_dir);
+            }
+            
+            header('Location: dashboard.php');
+            exit;
+        } catch (PDOException $e) {
+            $error = "Error deleting game: " . $e->getMessage();
+        }
+    } else {
+        $title = $_POST['title'] ?? '';
+        $description = $_POST['description'] ?? '';
+        $genre = $_POST['genre'] ?? '';
+        $status = $_POST['status'] ?? 'DRAFT';
+        $current_version = $_POST['current_version'] ?? '0.1.0';
         
-        header('Location: dashboard.php');
-        exit;
-    } catch (PDOException $e) {
-        $error = "Error: " . $e->getMessage();
+        // If not admin and trying to set to PLAYABLE, set to PENDING_APPROVAL instead
+        if ($user['id'] != 1 && $status === 'PLAYABLE') {
+            $status = 'PENDING_APPROVAL_P';
+        }
+        if ($user['id'] != 1 && $status === 'PUBLIC_UNPLAYABLE') {
+            $status = 'PENDING_APPROVAL_PU';
+        }
+        
+        try {
+            $stmt = $pdo->prepare("UPDATE games SET title = ?, description = ?, genre = ?, status = ?, current_version = ? WHERE id = ? AND owner_user_id = ?");
+            $stmt->execute([$title, $description, $genre, $status, $current_version, $game_id, $user['id']]);
+            
+            // Handle new game file upload
+            if (isset($_FILES['game_file']) && $_FILES['game_file']['error'] === UPLOAD_ERR_OK) {
+                $upload_dir = "uploads/games/$game_id/";
+                if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
+                move_uploaded_file($_FILES['game_file']['tmp_name'], $upload_dir . 'game.zip');
+            }
+            
+            header('Location: dashboard.php');
+            exit;
+        } catch (PDOException $e) {
+            $error = "Error: " . $e->getMessage();
+        }
     }
 }
 ?>
@@ -105,6 +139,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 4px;
             margin-bottom: 20px;
         }
+        .delete-button {
+            background: #d32f2f;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        .file-input {
+            padding: 8px;
+        }
     </style>
 </head>
 <body>
@@ -120,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="error"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
-            <form method="POST">
+            <form method="POST" enctype="multipart/form-data">
                 <div class="form-group">
                     <label class="form-label" for="title">Title</label>
                     <input type="text" id="title" name="title" class="form-input" value="<?= htmlspecialchars($game['title']) ?>" required>
@@ -142,16 +190,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <div class="form-group">
+                    <label class="form-label" for="game_file">Upload New Version (Optional)</label>
+                    <input type="file" id="game_file" name="game_file" class="form-input file-input" accept=".zip">
+                </div>
+
+                <div class="form-group">
                     <label class="form-label" for="status">Status</label>
                     <select id="status" name="status" class="form-select">
                         <option value="DRAFT" <?= $game['status'] === 'DRAFT' ? 'selected' : '' ?>>Draft</option>
                         <option value="PUBLIC_UNPLAYABLE" <?= $game['status'] === 'PUBLIC_UNPLAYABLE' ? 'selected' : '' ?>>Public but Unplayable</option>
-                        <option value="PLAYABLE" <?= $game['status'] === 'PLAYABLE' ? 'selected' : '' ?>>Playable</option>
+                        <option value="PLAYABLE" <?= $game['status'] === 'PLAYABLE' ? 'selected' : '' ?>><?= $user['id'] == 1 ? 'Playable' : 'Submit for Approval' ?></option>
                     </select>
                 </div>
 
                 <button type="submit" class="submit-button">Update Game</button>
                 <a href="dashboard.php" class="cancel-button">Cancel</a>
+                <button type="submit" name="delete" class="delete-button" onclick="return confirm('Are you sure you want to delete this game? This cannot be undone.')">Delete Game</button>
             </form>
         </div>
     </div>

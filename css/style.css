@@ -57,6 +57,16 @@ body {
     color: #ffffff;
 }
 
+.status-pending_approval, .status-pending_approval_pu, .status-pending_approval_p {
+    background: #ff9800;
+    color: #ffffff;
+}
+
+.status-reject {
+    background: #d32f2f;
+    color: #ffffff;
+}
+
 .game-content {
     display: grid;
     grid-template-columns: 2fr 1fr;

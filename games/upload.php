@@ -18,13 +18,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $uses_crengine = isset($_POST['uses_crengine']) ? 1 : 0;
     $is_crengine_mod = isset($_POST['is_crengine_mod']) ? 1 : 0;
     $status = $_POST['status'] ?? 'DRAFT';
+    
+    // If not admin and trying to set to PLAYABLE, set to PENDING_APPROVAL instead
+    if ($user['id'] != 1 && $status === 'PLAYABLE') {
+        $status = 'PENDING_APPROVAL';
+    }
     $whitelist_visibility = isset($_POST['whitelist_visibility']) ? 1 : 0;
     $whitelist_play = isset($_POST['whitelist_play']) ? 1 : 0;
     $current_version = $_POST['current_version'] ?? '0.1.0';
     
     try {
         $stmt = $pdo->prepare("INSERT INTO games (slug, title, description, genre, owner_user_id, hosting_type, game_url, uses_crengine, is_crengine_mod, status, whitelist_visibility, whitelist_play, current_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$slug, $title, $description, $genre, $hosting_type, $user['id'], $game_url, $uses_crengine, $is_crengine_mod, $status, $whitelist_visibility, $whitelist_play, $current_version]);
+        $stmt->execute([$slug, $title, $description, $genre, $user['id'], $hosting_type, $game_url, $uses_crengine, $is_crengine_mod, $status, $whitelist_visibility, $whitelist_play, $current_version]);
         
         $game_id = $pdo->lastInsertId();
         
@@ -177,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="form-group">
                     <label class="form-label">Start as released?</label>
                     <div class="checkbox-group">
-                        <label><input type="radio" name="status" value="PLAYABLE"> Playable Immediately (Recommended for games already created)</label>
+                        <label><input type="radio" name="status" value="PLAYABLE"> <?= $user['id'] == 1 ? 'Playable Immediately' : 'Submit for Approval' ?> (Recommended for games already created)</label>
                         <label><input type="radio" name="status" value="PUBLIC_UNPLAYABLE"> Public but unplayable (Recommended for works in progress)</label>
                         <label><input type="radio" name="status" value="DRAFT" checked> Draft</label>
                         <label><input type="checkbox" name="whitelist_visibility"> Whitelisted visibility</label>

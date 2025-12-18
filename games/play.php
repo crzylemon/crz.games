@@ -25,7 +25,7 @@ try {
     }
     //$game['status'] === 'PLAYABLE' || $user['id'] === 1 || $user['id'] === $game['owner_user_id']
     // if this does not match, error with "No access"
-    if (!($game['status'] === 'PLAYABLE' || $user['id'] === 1 || $user['id'] === $game['owner_user_id'])) {
+    if (!($game['status'] === 'PLAYABLE' || $user['id'] === 1 || $user['id'] === $game['owner_user_id']) || $user['id'] === 2) {
         header('HTTP/1.0 403 Forbidden');
         echo "Game is not playable";
         exit;
@@ -43,6 +43,11 @@ if ($game['uses_crengine']) {
     $gameUrl = "/games/crengine.html?game={$game['id']}";
 } else {
     $gameUrl = $game['hosting_type'] === 'URL' ? $game['game_url'] : "/games/uploads/games/{$game['slug']}/{$game['entry_file']}";
+}
+// if the game is rejected, pending approval, draft, or whitelisted (where you're not on list) then kick out
+if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' || ($user && ($user['id'] === 1 || $user['id'] === $game['owner_user_id'])))) {
+    header('Location: /games/');
+    exit;
 }
 ?>
 <!DOCTYPE html>

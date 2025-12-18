@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CRENGINE Bundler</title>
+<script src="https://cdn.jsdelivr.net/npm/javascript-obfuscator/dist/index.browser.js"></script>
+</head>
+<body>
+<a href="/games/dashboard.php">Dashboard</a>
+<h2>CRENGINE .cre Bundler</h2>
+<input type="file" id="files" webkitdirectory directory multiple>
+<br><br>
+<input type="checkbox" id="nonRelease" checked> Non-release (skip obfuscation)
+<br><br>
+<button id="bundleBtn">Bundle into .cre</button>
+<script>
+document.getElementById('bundleBtn').onclick = async () => {
+    const files = Array.from(document.getElementById('files').files).filter(f => f.name.endsWith('.js'));
+    const nonRelease = document.getElementById('nonRelease').checked;
+    
+    if (!files.length) return alert('No JS files found');
+    let pre = '//{"META": {"version": "mega-2"}}\n'
+    let bundle = '// CRENGINE Bundle\n';
+    
+    for (const file of files) {
+        const content = await file.text();
+        bundle += `\n// === ${file.webkitRelativePath} ===\n`;
+        bundle += `${content}\n`;
+    }
+    
+    if (!nonRelease) {
+        bundle = JavaScriptObfuscator.obfuscate(bundle).getObfuscatedCode();
+    }
+    bundle = pre + bundle
+    
+    const blob = new Blob([bundle], {type: 'application/javascript'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `client.cre`;
+    a.click();
+    URL.revokeObjectURL(url);
+};
+</script>
+
+</body>
+</html>
