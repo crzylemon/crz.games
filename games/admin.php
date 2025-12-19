@@ -1,20 +1,24 @@
 <?php
 require_once '../db.php';
 require_once '../user/session.php';
+require_once 'includes/admin.php';
 
 $user = getCurrentUser();
-if (!$user || $user['id'] != 1) {
-    header('Location: index.php');
-    exit;
-}
+requireAdmin();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $game_id = $_POST['game_id'] ?? 0;
     $action = $_POST['action'] ?? '';
     
     if ($action === 'approve') {
-        $stmt = $pdo->prepare("UPDATE games SET status = 'PLAYABLE' WHERE id = ?");
-        $stmt->execute([$game_id]);
+        // if it's PENDING_APPROVAL_P, set to PLAYABLE, but if _PU, then set to PUBLIC_UNPLAYABLE
+        if (strpos($game_id, '_PU') !== false) {
+            $stmt = $pdo->prepare("UPDATE games SET status = 'PUBLIC_UNPLAYABLE' WHERE id = ?");
+            $stmt->execute([$game_id]);
+        } else {
+            $stmt = $pdo->prepare("UPDATE games SET status = 'PLAYABLE' WHERE id = ?");
+            $stmt->execute([$game_id]);
+        }
     } elseif ($action === 'reject') {
         $stmt = $pdo->prepare("UPDATE games SET status = 'DRAFT' WHERE id = ?");
         $stmt->execute([$game_id]);
@@ -34,6 +38,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute(['banner_text', $banner_text]);
         $stmt->execute(['banner_type', $banner_type]);
         $stmt->execute(['banner_enabled', $banner_enabled]);
+    } elseif ($action === 'add_admin') {
+        $username = $_POST['admin_username'] ?? '';
+        if ($username) {
+            $stmt = $pdo->prepare("SELECT id FROM accounts WHERE username = ?");
+            $stmt->execute([$username]);
+            $userId = $stmt->fetchColumn();
+            if ($userId && addAdmin($userId)) {
+                $success_message = 'Admin added successfully';
+            } else {
+                $error_message = 'User not found or already admin';
+            }
+        }
+    } elseif ($action === 'remove_admin') {
+        $userId = $_POST['admin_id'] ?? 0;
+        if ($userId && removeAdmin($userId)) {
+            $success_message = 'Admin removed successfully';
+        } else {
+            $error_message = 'Cannot remove this admin';
+        }
+    } elseif ($action === 'set_hero_game') {
+        $game_id = $_POST['hero_game_id'] ?? '';
+        $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        $stmt->execute(['hero_game_id', $game_id]);
+        $success_message = 'Hero game updated';
+    } elseif ($action === 'toggle_featured') {
+        $game_id = $_POST['game_id'] ?? 0;
+        $featured = $_POST['featured'] ?? 0;
+        $stmt = $pdo->prepare("UPDATE games SET featured = ? WHERE id = ?");
+        $stmt->execute([$featured, $game_id]);
+        $success_message = $featured ? 'Game added to featured' : 'Game removed from featured';
+    } elseif ($action === 'set_event_banner') {
+        $event_title = $_POST['event_title'] ?? '';
+        $event_description = $_POST['event_description'] ?? '';
+        $event_image = $_POST['event_image'] ?? '';
+        $event_enabled = isset($_POST['event_enabled']) ? 1 : 0;
+        
+        $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        $stmt->execute(['event_title', $event_title]);
+        $stmt->execute(['event_description', $event_description]);
+        $stmt->execute(['event_image', $event_image]);
+        $stmt->execute(['event_enabled', $event_enabled]);
+        $success_message = 'Event banner updated';
     }
     
     header('Location: admin.php');
@@ -41,22 +87,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.status = 'PENDING_APPROVAL' ORDER BY g.created_at ASC");
+    $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.status = 'PENDING_APPROVAL_P' || g.status = 'PENDING_APPROVAL_PU' ORDER BY g.created_at ASC");
     $stmt->execute();
     $pending_games = $stmt->fetchAll();
     
-    // Get current banner settings
-    $banner_text = '';
-    $banner_type = 'info';
-    $banner_enabled = 0;
-    
-    $stmt = $pdo->prepare("SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('banner_text', 'banner_type', 'banner_enabled')");
+    // Get current settings
+    $stmt = $pdo->prepare("SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('banner_text', 'banner_type', 'banner_enabled', 'hero_game_id', 'event_title', 'event_description', 'event_image', 'event_enabled')");
     $stmt->execute();
     $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
     
     $banner_text = $settings['banner_text'] ?? '';
     $banner_type = $settings['banner_type'] ?? 'info';
     $banner_enabled = $settings['banner_enabled'] ?? 0;
+    $hero_game_id = $settings['hero_game_id'] ?? '';
+    $event_title = $settings['event_title'] ?? '';
+    $event_description = $settings['event_description'] ?? '';
+    $event_image = $settings['event_image'] ?? '';
+    $event_enabled = $settings['event_enabled'] ?? 0;
+    
+    // Get all games for selection
+    $stmt = $pdo->prepare("SELECT g.id, g.title, g.slug, a.username FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.status IN ('PLAYABLE', 'PUBLIC_UNPLAYABLE') ORDER BY g.title");
+    $stmt->execute();
+    $all_games = $stmt->fetchAll();
+    
+    // Add featured column if it doesn't exist
+    try {
+        $pdo->exec("ALTER TABLE games ADD COLUMN featured TINYINT(1) DEFAULT 0");
+    } catch (PDOException $e) {
+        // Column already exists
+    }
+    
+    // Get admin list with usernames
+    $adminIds = getAdminList();
+    $adminUsers = [];
+    if (!empty($adminIds)) {
+        $placeholders = str_repeat('?,', count($adminIds) - 1) . '?';
+        $stmt = $pdo->prepare("SELECT id, username, display_name FROM accounts WHERE id IN ($placeholders)");
+        $stmt->execute($adminIds);
+        $adminUsers = $stmt->fetchAll();
+    }
 } catch (PDOException $e) {
     die("Error: " . $e->getMessage());
 }
@@ -164,11 +233,120 @@ try {
     </style>
 </head>
 <body>
-    <button onclick="window.location.href='index.php'" style="position: fixed; top: 20px; right: 20px; background: #2a5298; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; z-index: 1000;">← Back to Games</button>
-    <div class="container">
+    <?php include 'includes/banner.php'; ?>
+    <?php include 'includes/account_nav.php'; ?>
+    <div class="container" style="margin-top: 80px;">
         <div class="admin-header">
             <h1>Admin Panel</h1>
             <p>Manage game approvals and site administration</p>
+            <p>Links: <a href="filemanager.php">File Manager</a><!-- if localhost, show phpmyadmin (/phpmyadmin) --> <?php if (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false): ?>, <a href="/phpmyadmin">phpMyAdmin</a><?php endif; ?>
+        </div>
+
+        <?php if (isset($success_message)): ?>
+            <div style="background: #4caf50; color: white; padding: 10px; border-radius: 4px; margin-bottom: 20px;"><?= htmlspecialchars($success_message) ?></div>
+        <?php endif; ?>
+        <?php if (isset($error_message)): ?>
+            <div style="background: #f44336; color: white; padding: 10px; border-radius: 4px; margin-bottom: 20px;"><?= htmlspecialchars($error_message) ?></div>
+        <?php endif; ?>
+
+        <div class="banner-section">
+            <h2>Admin Management</h2>
+            <div style="display: flex; gap: 30px;">
+                <div style="flex: 1;">
+                    <h3>Current Admins</h3>
+                    <?php foreach ($adminUsers as $admin): ?>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #16202d; margin-bottom: 5px; border-radius: 4px;">
+                            <span><?= htmlspecialchars($admin['display_name'] ?: $admin['username']) ?> (<?= htmlspecialchars($admin['username']) ?>)</span>
+                            <?php if ($admin['id'] != 1): ?>
+                                <form method="POST" style="display: inline;">
+                                    <input type="hidden" name="admin_id" value="<?= $admin['id'] ?>">
+                                    <button type="submit" name="action" value="remove_admin" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;" onclick="return confirm('Remove admin access?')">Remove</button>
+                                </form>
+                            <?php else: ?>
+                                <span style="color: #888; font-size: 12px;">Owner</span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div style="flex: 1;">
+                    <h3>Add Admin</h3>
+                    <form method="POST">
+                        <div class="form-group">
+                            <label class="form-label" for="admin_username">Username</label>
+                            <input type="text" id="admin_username" name="admin_username" class="form-input" placeholder="Enter username" required>
+                        </div>
+                        <button type="submit" name="action" value="add_admin" class="update-btn">Add Admin</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="banner-section">
+            <h2>Featured Content Management</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+                <div>
+                    <h3>Hero Game</h3>
+                    <form method="POST">
+                        <div class="form-group">
+                            <label class="form-label" for="hero_game_id">Select Hero Game</label>
+                            <select id="hero_game_id" name="hero_game_id" class="form-select">
+                                <option value="">None (use most played)</option>
+                                <?php foreach ($all_games as $game): ?>
+                                    <option value="<?= $game['id'] ?>" <?= $hero_game_id == $game['id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($game['title']) ?> (<?= htmlspecialchars($game['username']) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <button type="submit" name="action" value="set_hero_game" class="update-btn">Set Hero Game</button>
+                    </form>
+                </div>
+                <div>
+                    <h3>Event Banner (Replaces Hero)</h3>
+                    <form method="POST">
+                        <div class="form-group">
+                            <label class="form-label">
+                                <input type="checkbox" name="event_enabled" <?= $event_enabled ? 'checked' : '' ?>>
+                                Enable Event Banner
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="event_title">Event Title</label>
+                            <input type="text" id="event_title" name="event_title" class="form-input" value="<?= htmlspecialchars($event_title) ?>" placeholder="Special Event Title">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="event_description">Event Description</label>
+                            <textarea id="event_description" name="event_description" class="form-textarea" placeholder="Event description..."><?= htmlspecialchars($event_description) ?></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="event_image">Event Image URL</label>
+                            <input type="url" id="event_image" name="event_image" class="form-input" value="<?= htmlspecialchars($event_image) ?>" placeholder="https://example.com/event.jpg">
+                        </div>
+                        <button type="submit" name="action" value="set_event_banner" class="update-btn">Update Event</button>
+                    </form>
+                </div>
+            </div>
+            
+            <h3>Featured Games Management</h3>
+            <div style="max-height: 300px; overflow-y: auto; background: #16202d; border-radius: 4px; padding: 10px;">
+                <?php foreach ($all_games as $game): ?>
+                    <?php
+                    $stmt = $pdo->prepare("SELECT featured FROM games WHERE id = ?");
+                    $stmt->execute([$game['id']]);
+                    $is_featured = $stmt->fetchColumn();
+                    ?>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #3c4043;">
+                        <span><?= htmlspecialchars($game['title']) ?> <small>(<?= htmlspecialchars($game['username']) ?>)</small></span>
+                        <form method="POST" style="display: inline;">
+                            <input type="hidden" name="game_id" value="<?= $game['id'] ?>">
+                            <input type="hidden" name="featured" value="<?= $is_featured ? 0 : 1 ?>">
+                            <button type="submit" name="action" value="toggle_featured" style="background: <?= $is_featured ? '#f44336' : '#4caf50' ?>; color: white; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-size: 12px;">
+                                <?= $is_featured ? 'Remove' : 'Feature' ?>
+                            </button>
+                        </form>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         </div>
 
         <div class="banner-section">
