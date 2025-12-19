@@ -230,6 +230,69 @@ try {
             border-radius: 4px;
             cursor: pointer;
         }
+        .search-results {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #16202d;
+            border: 1px solid #3c4043;
+            border-radius: 4px;
+            margin-top: 5px;
+            display: none;
+        }
+        .search-result {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #3c4043;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .search-result:hover {
+            background: #2a2a2a;
+        }
+        .game-thumb {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 3px;
+            margin-right: 10px;
+        }
+        .game-name {
+            font-weight: bold;
+            color: #c7d5e0;
+        }
+        .game-author {
+            font-size: 0.8rem;
+            color: #8f98a0;
+        }
+        .selected-game {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: #16202d;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .remove-btn {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-left: auto;
+        }
+        .no-selection {
+            color: #8f98a0;
+            font-style: italic;
+            padding: 10px;
+        }
+        .current-selection {
+            margin-top: 10px;
+        }
+        .featured-list {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -285,21 +348,32 @@ try {
             <h2>Featured Content Management</h2>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
                 <div>
-                    <h3>Hero Game</h3>
-                    <form method="POST">
-                        <div class="form-group">
-                            <label class="form-label" for="hero_game_id">Select Hero Game</label>
-                            <select id="hero_game_id" name="hero_game_id" class="form-select">
-                                <option value="">None (use most played)</option>
-                                <?php foreach ($all_games as $game): ?>
-                                    <option value="<?= $game['id'] ?>" <?= $hero_game_id == $game['id'] ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($game['title']) ?> (<?= htmlspecialchars($game['username']) ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                    <h3>Hero Game Selection</h3>
+                    <div class="form-group">
+                        <label class="form-label">Search and Select Hero Game</label>
+                        <input type="text" id="hero-search" class="form-input" placeholder="Search games..." onkeyup="searchGames('hero')">
+                        <div id="hero-results" class="search-results"></div>
+                        <div id="current-hero" class="current-selection">
+                            <?php if ($hero_game_id): ?>
+                                <?php 
+                                $stmt = $pdo->prepare("SELECT g.title, g.thumbnail_small, a.username FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.id = ?");
+                                $stmt->execute([$hero_game_id]);
+                                $hero = $stmt->fetch();
+                                if ($hero): ?>
+                                    <div class="selected-game">
+                                        <img src="<?= htmlspecialchars($hero['thumbnail_small']) ?>" class="game-thumb">
+                                        <div>
+                                            <div class="game-name"><?= htmlspecialchars($hero['title']) ?></div>
+                                            <div class="game-author">by <?= htmlspecialchars($hero['username']) ?></div>
+                                        </div>
+                                        <button onclick="removeHero()" class="remove-btn">Remove</button>
+                                    </div>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <div class="no-selection">No hero game selected (using most played)</div>
+                            <?php endif; ?>
                         </div>
-                        <button type="submit" name="action" value="set_hero_game" class="update-btn">Set Hero Game</button>
-                    </form>
+                    </div>
                 </div>
                 <div>
                     <h3>Event Banner (Replaces Hero)</h3>
@@ -328,24 +402,30 @@ try {
             </div>
             
             <h3>Featured Games Management</h3>
-            <div style="max-height: 300px; overflow-y: auto; background: #16202d; border-radius: 4px; padding: 10px;">
-                <?php foreach ($all_games as $game): ?>
-                    <?php
-                    $stmt = $pdo->prepare("SELECT featured FROM games WHERE id = ?");
-                    $stmt->execute([$game['id']]);
-                    $is_featured = $stmt->fetchColumn();
-                    ?>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #3c4043;">
-                        <span><?= htmlspecialchars($game['title']) ?> <small>(<?= htmlspecialchars($game['username']) ?>)</small></span>
-                        <form method="POST" style="display: inline;">
-                            <input type="hidden" name="game_id" value="<?= $game['id'] ?>">
-                            <input type="hidden" name="featured" value="<?= $is_featured ? 0 : 1 ?>">
-                            <button type="submit" name="action" value="toggle_featured" style="background: <?= $is_featured ? '#f44336' : '#4caf50' ?>; color: white; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-size: 12px;">
-                                <?= $is_featured ? 'Remove' : 'Feature' ?>
-                            </button>
-                        </form>
-                    </div>
-                <?php endforeach; ?>
+            <div class="form-group">
+                <label class="form-label">Search and Feature Games</label>
+                <input type="text" id="featured-search" class="form-input" placeholder="Search games to feature..." onkeyup="searchGames('featured')">
+                <div id="featured-results" class="search-results"></div>
+            </div>
+            
+            <div class="featured-list">
+                <h4>Currently Featured Games:</h4>
+                <div id="current-featured">
+                    <?php 
+                    $stmt = $pdo->prepare("SELECT g.id, g.title, g.thumbnail_small, a.username FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.featured = 1 ORDER BY g.title");
+                    $stmt->execute();
+                    $featured_games = $stmt->fetchAll();
+                    foreach ($featured_games as $game): ?>
+                        <div class="selected-game" data-game-id="<?= $game['id'] ?>">
+                            <img src="<?= htmlspecialchars($game['thumbnail_small']) ?>" class="game-thumb">
+                            <div>
+                                <div class="game-name"><?= htmlspecialchars($game['title']) ?></div>
+                                <div class="game-author">by <?= htmlspecialchars($game['username']) ?></div>
+                            </div>
+                            <button onclick="removeFeatured(<?= $game['id'] ?>)" class="remove-btn">Remove</button>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
         </div>
 
@@ -415,5 +495,69 @@ try {
             </div>
         <?php endif; ?>
     </div>
+    
+    <script>
+    function searchGames(type) {
+        const query = document.getElementById(type + '-search').value;
+        const results = document.getElementById(type + '-results');
+        
+        if (query.length < 2) {
+            results.style.display = 'none';
+            return;
+        }
+        
+        fetch('search_games.php?q=' + encodeURIComponent(query))
+            .then(response => response.json())
+            .then(games => {
+                results.innerHTML = '';
+                games.forEach(game => {
+                    const div = document.createElement('div');
+                    div.className = 'search-result';
+                    div.innerHTML = `
+                        <img src="${game.thumbnail_small}" class="game-thumb">
+                        <div>
+                            <div class="game-name">${game.title}</div>
+                            <div class="game-author">by ${game.username}</div>
+                        </div>
+                    `;
+                    div.onclick = () => selectGame(game, type);
+                    results.appendChild(div);
+                });
+                results.style.display = games.length ? 'block' : 'none';
+            });
+    }
+    
+    function selectGame(game, type) {
+        if (type === 'hero') {
+            fetch('admin.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `action=set_hero_game&hero_game_id=${game.id}`
+            }).then(() => location.reload());
+        } else {
+            fetch('admin.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `action=toggle_featured&game_id=${game.id}&featured=1`
+            }).then(() => location.reload());
+        }
+    }
+    
+    function removeHero() {
+        fetch('admin.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'action=set_hero_game&hero_game_id='
+        }).then(() => location.reload());
+    }
+    
+    function removeFeatured(gameId) {
+        fetch('admin.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `action=toggle_featured&game_id=${gameId}&featured=0`
+        }).then(() => location.reload());
+    }
+    </script>
 </body>
 </html>

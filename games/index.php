@@ -5,6 +5,18 @@ require_once '../user/session.php';
 $current_user = getCurrentUser();
 
 try {
+    // Create ratings table if it doesn't exist
+    $pdo->exec("CREATE TABLE IF NOT EXISTS game_ratings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        game_id INT NOT NULL,
+        user_id INT NOT NULL,
+        rating TINYINT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_user_game (user_id, game_id),
+        INDEX idx_game_id (game_id)
+    )");
+    
     // Get admin settings
     $stmt = $pdo->prepare("SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('hero_game_id', 'event_title', 'event_description', 'event_image', 'event_enabled')");
     $stmt->execute();
@@ -18,29 +30,27 @@ try {
     
     // Get hero game (admin selected or most played)
     if ($hero_game_id) {
-        $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.id = ? AND g.status = 'PLAYABLE'");
+        $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name, AVG(r.rating) as avg_rating, COUNT(r.rating) as rating_count FROM games g JOIN accounts a ON g.owner_user_id = a.id LEFT JOIN game_ratings r ON g.id = r.game_id WHERE g.id = ? AND g.status = 'PLAYABLE' GROUP BY g.id");
         $stmt->execute([$hero_game_id]);
         $featured_game = $stmt->fetch();
     } else {
-        $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.status = 'PLAYABLE' ORDER BY g.play_count DESC LIMIT 1");
+        $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name, AVG(r.rating) as avg_rating, COUNT(r.rating) as rating_count FROM games g JOIN accounts a ON g.owner_user_id = a.id LEFT JOIN game_ratings r ON g.id = r.game_id WHERE g.status = 'PLAYABLE' GROUP BY g.id ORDER BY g.play_count DESC LIMIT 1");
         $stmt->execute();
         $featured_game = $stmt->fetch();
     }
     
-    // Get featured games for New Releases section
-    $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.status = 'PLAYABLE' AND g.featured = 1 ORDER BY g.created_at DESC LIMIT 6");
+    // Get admin-featured games
+    $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name, AVG(r.rating) as avg_rating, COUNT(r.rating) as rating_count FROM games g JOIN accounts a ON g.owner_user_id = a.id LEFT JOIN game_ratings r ON g.id = r.game_id WHERE g.status = 'PLAYABLE' AND g.featured = 1 GROUP BY g.id ORDER BY g.created_at DESC LIMIT 6");
     $stmt->execute();
     $featured_releases = $stmt->fetchAll();
     
-    // If no featured games, fall back to new releases
-    if (empty($featured_releases)) {
-        $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.status = 'PLAYABLE' ORDER BY g.created_at DESC LIMIT 6");
-        $stmt->execute();
-        $featured_releases = $stmt->fetchAll();
-    }
+    // Get new releases (separate from featured)
+    $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name, AVG(r.rating) as avg_rating, COUNT(r.rating) as rating_count FROM games g JOIN accounts a ON g.owner_user_id = a.id LEFT JOIN game_ratings r ON g.id = r.game_id WHERE g.status = 'PLAYABLE' GROUP BY g.id ORDER BY g.created_at DESC LIMIT 6");
+    $stmt->execute();
+    $new_releases = $stmt->fetchAll();
     
     // Get popular games
-    $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name FROM games g JOIN accounts a ON g.owner_user_id = a.id WHERE g.status = 'PLAYABLE' ORDER BY g.play_count DESC LIMIT 8");
+    $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name, AVG(r.rating) as avg_rating, COUNT(r.rating) as rating_count FROM games g JOIN accounts a ON g.owner_user_id = a.id LEFT JOIN game_ratings r ON g.id = r.game_id WHERE g.status = 'PLAYABLE' GROUP BY g.id ORDER BY g.play_count DESC LIMIT 8");
     $stmt->execute();
     $popular_games = $stmt->fetchAll();
 } catch (PDOException $e) {
@@ -224,6 +234,16 @@ $mapStatusToLabel = [
             font-size: 0.75rem;
             color: #8f98a0;
         }
+        .card-rating {
+            font-size: 0.75rem;
+            color: #ffc107;
+            margin-top: 5px;
+        }
+        .game-rating {
+            color: #ffc107;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -265,10 +285,32 @@ $mapStatusToLabel = [
             </form>
         </div>
 
+        <?php if (!empty($featured_releases)): ?>
+            <div class="section">
+                <h2 class="section-title">Featured Games</h2>
+                <div class="games-row">
+                    <?php foreach ($featured_releases as $game): ?>
+                        <div class="game-card-small" onclick="location.href='game.php?slug=<?= urlencode($game['slug']) ?>'">
+                            <?php if ($game['thumbnail_small']): ?>
+                                <img src="<?= htmlspecialchars($game['thumbnail_small']) ?>" alt="<?= htmlspecialchars($game['title']) ?>" class="card-image">
+                            <?php endif; ?>
+                            <div class="card-content">
+                                <div class="card-title"><?= htmlspecialchars($game['title']) ?></div>
+                                <div class="card-author">by <?= htmlspecialchars($game['display_name'] ?: $game['username']) ?></div>
+                                <?php if ($game['avg_rating']): ?>
+                                    <div class="card-rating">★ <?= number_format($game['avg_rating'], 1) ?> (<?= $game['rating_count'] ?>)</div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+        
         <div class="section">
-            <h2 class="section-title"><?= !empty($featured_releases) && $stmt->rowCount() > 0 ? 'Featured Games' : 'New Releases' ?></h2>
+            <h2 class="section-title">New Releases</h2>
             <div class="games-row">
-                <?php foreach ($featured_releases as $game): ?>
+                <?php foreach ($new_releases as $game): ?>
                     <div class="game-card-small" onclick="location.href='game.php?slug=<?= urlencode($game['slug']) ?>'">
                         <?php if ($game['thumbnail_small']): ?>
                             <img src="<?= htmlspecialchars($game['thumbnail_small']) ?>" alt="<?= htmlspecialchars($game['title']) ?>" class="card-image">
@@ -276,6 +318,9 @@ $mapStatusToLabel = [
                         <div class="card-content">
                             <div class="card-title"><?= htmlspecialchars($game['title']) ?></div>
                             <div class="card-author">by <?= htmlspecialchars($game['display_name'] ?: $game['username']) ?></div>
+                            <?php if ($game['avg_rating']): ?>
+                                <div class="card-rating">★ <?= number_format($game['avg_rating'], 1) ?> (<?= $game['rating_count'] ?>)</div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -295,6 +340,9 @@ $mapStatusToLabel = [
                             <div class="game-card-author">by <a href="profile.php?user=<?= urlencode($game['username']) ?>"><?= htmlspecialchars($game['display_name'] ?: $game['username']) ?></a></div>
                             <?php if ($game['genre']): ?>
                                 <div class="game-card-genre"><?= htmlspecialchars($game['genre']) ?></div>
+                            <?php endif; ?>
+                            <?php if ($game['avg_rating']): ?>
+                                <div class="game-rating">★ <?= number_format($game['avg_rating'], 1) ?> (<?= $game['rating_count'] ?> rating<?= $game['rating_count'] != 1 ? 's' : '' ?>)</div>
                             <?php endif; ?>
                         </div>
                     </div>
