@@ -9,6 +9,30 @@ if (empty($slug)) {
     exit;
 }
 
+// Create ratings table if it doesn't exist
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS game_ratings (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        game_id INT NOT NULL,
+        user_id INT NOT NULL,
+        rating TINYINT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_user_game (user_id, game_id)
+    )");
+} catch (PDOException $e) {
+    // Table creation failed, continue anyway
+}
+
+// Handle rating submission
+if ($_POST && isset($_POST['rating']) && $user) {
+    $rating = (int)$_POST['rating'];
+    if ($rating >= 1 && $rating <= 5) {
+        $stmt = $pdo->prepare("INSERT INTO game_ratings (game_id, user_id, rating) VALUES ((SELECT id FROM games WHERE slug = ?), ?, ?) ON DUPLICATE KEY UPDATE rating = VALUES(rating), updated_at = CURRENT_TIMESTAMP");
+        $stmt->execute([$slug, $user['id'], $rating]);
+    }
+}
+
 try {
     $stmt = $pdo->prepare("SELECT g.*, a.username, a.display_name, ul.id as in_library FROM games g JOIN accounts a ON g.owner_user_id = a.id LEFT JOIN user_library ul ON g.id = ul.game_id AND ul.user_id = ? WHERE g.slug = ?");
     $stmt->execute([$user['id'] ?? 0, $slug]);
@@ -18,6 +42,18 @@ try {
         header('HTTP/1.0 404 Not Found');
         echo "Game not found";
         exit;
+    }
+    
+    // Get rating data
+    $stmt = $pdo->prepare("SELECT AVG(rating) as avg_rating, COUNT(*) as rating_count FROM game_ratings WHERE game_id = ?");
+    $stmt->execute([$game['id']]);
+    $rating_data = $stmt->fetch();
+    
+    $user_rating = 0;
+    if ($user) {
+        $stmt = $pdo->prepare("SELECT rating FROM game_ratings WHERE game_id = ? AND user_id = ?");
+        $stmt->execute([$game['id'], $user['id']]);
+        $user_rating = $stmt->fetchColumn() ?: 0;
     }
     
     $screenshots = json_decode($game['screenshots'] ?? '[]', true);
@@ -181,6 +217,34 @@ if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' 
             color: #c7d5e0;
             line-height: 1.6;
         }
+        .rating-section {
+            background: #1e2329;
+            padding: 20px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .rating-stars {
+            display: flex;
+            gap: 5px;
+            margin: 10px 0;
+        }
+        .star {
+            font-size: 24px;
+            color: #3c4043;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .star.filled {
+            color: #ffc107;
+        }
+        .star:hover {
+            color: #ffc107;
+        }
+        .rating-info {
+            color: #8f98a0;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -266,10 +330,25 @@ if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' 
                         <div class="stat-label">Plays</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-number"><?= number_format($game['total_play_time_hours'], 1) ?>h</div>
-                        <div class="stat-label">Total Playtime</div>
+                        <div class="stat-number"><?= $rating_data['avg_rating'] ? number_format($rating_data['avg_rating'], 1) : 'N/A' ?></div>
+                        <div class="stat-label">Rating</div>
                     </div>
                 </div>
+                
+                <?php if ($user && ($user['id'] !== $game['owner_user_id'] || isAdmin($user['id']))): ?>
+                    <div class="info-section">
+                        <div class="info-title">Rate This Game</div>
+                        <form method="POST" id="rating-form">
+                            <div class="rating-stars">
+                                <?php for ($i = 1; $i <= 5; $i++): ?>
+                                    <span class="star <?= $i <= $user_rating ? 'filled' : '' ?>" data-rating="<?= $i ?>" onclick="setRating(<?= $i ?>)">★</span>
+                                <?php endfor; ?>
+                            </div>
+                            <input type="hidden" name="rating" id="rating-input" value="<?= $user_rating ?>">
+                        </form>
+                        <div class="rating-info"><?= $rating_data['rating_count'] ?> rating<?= $rating_data['rating_count'] != 1 ? 's' : '' ?></div>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -289,6 +368,27 @@ if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' 
                 window.location.href = '/games/play.php?slug=<?= urlencode($game['slug']) ?>';
             <?php endif; ?>
         }
+        
+        function setRating(rating) {
+            document.getElementById('rating-input').value = rating;
+            document.getElementById('rating-form').submit();
+        }
+        
+        // Hover effects for stars
+        document.querySelectorAll('.star').forEach((star, index) => {
+            star.addEventListener('mouseenter', () => {
+                document.querySelectorAll('.star').forEach((s, i) => {
+                    s.classList.toggle('filled', i <= index);
+                });
+            });
+        });
+        
+        document.querySelector('.rating-stars').addEventListener('mouseleave', () => {
+            const currentRating = parseInt(document.getElementById('rating-input').value);
+            document.querySelectorAll('.star').forEach((s, i) => {
+                s.classList.toggle('filled', i < currentRating);
+            });
+        });
     </script>
 </body>
 </html>
