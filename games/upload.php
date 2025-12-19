@@ -82,18 +82,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!isset($_FILES['screenshots']) || empty($_FILES['screenshots']['name'][0])) {
             throw new Exception("At least one screenshot is required");
         }
-        if (empty($_POST['trailer_url'])) {
+        $trailer_type = $_POST['trailer_type'] ?? 'url';
+        if ($trailer_type === 'url' && empty($_POST['trailer_url'])) {
             throw new Exception("Trailer video URL is required");
+        }
+        if ($trailer_type === 'file' && (!isset($_FILES['trailer_file']) || $_FILES['trailer_file']['error'] !== UPLOAD_ERR_OK)) {
+            throw new Exception("Trailer video file is required");
         }
         
         // Handle thumbnails
         $thumb_dir = "uploads/thumbnails/";
         if (!is_dir($thumb_dir)) mkdir($thumb_dir, 0755, true);
         
-        $small_path = $thumb_dir . $game_id . '_small.jpg';
+        $small_ext = pathinfo($_FILES['thumbnail_small']['name'], PATHINFO_EXTENSION);
+        $small_path = $thumb_dir . $game_id . '_small.' . $small_ext;
         move_uploaded_file($_FILES['thumbnail_small']['tmp_name'], $small_path);
         
-        $big_path = $thumb_dir . $game_id . '_big.jpg';
+        $big_ext = pathinfo($_FILES['thumbnail_big']['name'], PATHINFO_EXTENSION);
+        $big_path = $thumb_dir . $game_id . '_big.' . $big_ext;
         move_uploaded_file($_FILES['thumbnail_big']['tmp_name'], $big_path);
         
         // Handle screenshots
@@ -103,15 +109,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         foreach ($_FILES['screenshots']['tmp_name'] as $key => $tmp_name) {
             if ($_FILES['screenshots']['error'][$key] === UPLOAD_ERR_OK) {
-                $screenshot_path = $screenshot_dir . $game_id . '_' . $key . '.jpg';
+                $ext = pathinfo($_FILES['screenshots']['name'][$key], PATHINFO_EXTENSION);
+                $screenshot_path = $screenshot_dir . $game_id . '_' . $key . '.' . $ext;
                 move_uploaded_file($tmp_name, $screenshot_path);
                 $screenshots[] = $screenshot_path;
             }
         }
         
+        // Handle trailer
+        $trailer_url = '';
+        if ($trailer_type === 'url') {
+            $trailer_url = $_POST['trailer_url'];
+        } else {
+            $video_dir = "uploads/videos/";
+            if (!is_dir($video_dir)) mkdir($video_dir, 0755, true);
+            $video_ext = pathinfo($_FILES['trailer_file']['name'], PATHINFO_EXTENSION);
+            $video_path = $video_dir . $game_id . '_trailer.' . $video_ext;
+            move_uploaded_file($_FILES['trailer_file']['tmp_name'], $video_path);
+            $trailer_url = $video_path;
+        }
+        
         // Update game with all media
         $stmt = $pdo->prepare("UPDATE games SET thumbnail_small = ?, thumbnail_big = ?, screenshots = ?, trailer_url = ? WHERE id = ?");
-        $stmt->execute([$small_path, $big_path, json_encode($screenshots), $_POST['trailer_url'], $game_id]);
+        $stmt->execute([$small_path, $big_path, json_encode($screenshots), $trailer_url, $game_id]);
         
         header('Location: game.php?slug=' . urlencode($slug));
         exit;
@@ -310,9 +330,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label" for="trailer_url">Trailer Video URL *</label>
+                    <label class="form-label">Trailer Video *</label>
+                    <div class="radio-group">
+                        <div class="radio-item">
+                            <input type="radio" name="trailer_type" value="url" id="trailer_url_option" checked>
+                            <label for="trailer_url_option">Video URL (YouTube, Vimeo, etc.)</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" name="trailer_type" value="file" id="trailer_file_option">
+                            <label for="trailer_file_option">Upload Video File</label>
+                        </div>
+                    </div>
                     <input type="url" id="trailer_url" name="trailer_url" class="form-input" placeholder="https://youtube.com/watch?v=..." required>
-                    <div class="fine-print">Supports YouTube, Vimeo, Twitch, or direct video links (.mp4, .webm, .ogg)</div>
+                    <input type="file" id="trailer_file" name="trailer_file" class="form-input file-input" accept="video/*" style="display:none;">
+                    <div class="fine-print" id="trailer_url_help">Supports YouTube, Vimeo, Twitch, or direct video links</div>
+                    <div class="fine-print" id="trailer_file_help" style="display:none;">Upload .mp4, .webm, or .mov files (max 100MB)</div>
                 </div>
 
                 <button type="submit" class="submit-button">Upload Game</button>
@@ -333,6 +365,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         } else {
                             fileInput.style.display = 'none';
                             urlInput.style.display = 'block';
+                        }
+                    });
+                });
+                
+                document.querySelectorAll('input[name="trailer_type"]').forEach(radio => {
+                    radio.addEventListener('change', function() {
+                        const urlInput = document.getElementById('trailer_url');
+                        const fileInput = document.getElementById('trailer_file');
+                        const urlHelp = document.getElementById('trailer_url_help');
+                        const fileHelp = document.getElementById('trailer_file_help');
+                        
+                        if (this.value === 'url') {
+                            urlInput.style.display = 'block';
+                            fileInput.style.display = 'none';
+                            urlHelp.style.display = 'block';
+                            fileHelp.style.display = 'none';
+                            urlInput.required = true;
+                            fileInput.required = false;
+                        } else {
+                            urlInput.style.display = 'none';
+                            fileInput.style.display = 'block';
+                            urlHelp.style.display = 'none';
+                            fileHelp.style.display = 'block';
+                            urlInput.required = false;
+                            fileInput.required = true;
                         }
                     });
                 });
