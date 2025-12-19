@@ -242,9 +242,5 @@ body {
 }
 
 a {
-    color: #eff3ff;
-}
-
-a:visited {
-    color: #b7c9ff;
+    color: inherit; 
 }
