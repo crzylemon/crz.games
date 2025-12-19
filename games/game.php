@@ -245,6 +245,54 @@ if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' 
             font-size: 0.9rem;
             margin-top: 10px;
         }
+        .trailer-player {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .trailer-video {
+            width: 100%;
+            height: 100%;
+        }
+        .trailer-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .play-pause-btn, .volume-btn, .fullscreen-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 5px;
+        }
+        .progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+            cursor: pointer;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #66c0f4;
+            border-radius: 2px;
+            width: 0%;
+        }
+        .time-display {
+            color: white;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -273,7 +321,13 @@ if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' 
                 <?php if ($game['trailer_url']): ?>
                     <div class="trailer-section" style="margin-bottom: 20px;">
                         <h3 style="color: #66c0f4; margin-bottom: 10px;">Trailer</h3>
-                        <?php if (strpos($game['trailer_url'], 'youtube.com') !== false || strpos($game['trailer_url'], 'youtu.be') !== false): ?>
+                        <?php if (strpos($game['trailer_url'], 'uploads/videos/') === 0): ?>
+                            <div id="custom-trailer-player" style="width: 100%; height: 315px; background: #000; border-radius: 4px;"></div>
+                            <script src="js/trailer-player.js"></script>
+                            <script>
+                                new TrailerPlayer(document.getElementById('custom-trailer-player'), '<?= htmlspecialchars($game['trailer_url']) ?>');
+                            </script>
+                        <?php elseif (strpos($game['trailer_url'], 'youtube.com') !== false || strpos($game['trailer_url'], 'youtu.be') !== false): ?>
                             <?php 
                             $video_id = '';
                             if (strpos($game['trailer_url'], 'youtube.com') !== false) {
