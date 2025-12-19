@@ -293,6 +293,34 @@ if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' 
             color: white;
             font-size: 12px;
         }
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        .lightbox.active {
+            display: flex;
+        }
+        .lightbox img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 4px;
+        }
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -360,7 +388,7 @@ if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' 
                     <div class="screenshots">
                         <h3 style="color: #66c0f4; margin-bottom: 10px;">Screenshots</h3>
                         <?php foreach ($screenshots as $screenshot): ?>
-                            <img src="<?= htmlspecialchars($screenshot) ?>" alt="Screenshot" class="screenshot" style="width: 100%; margin-bottom: 10px; border-radius: 4px;">
+                            <img src="<?= htmlspecialchars($screenshot) ?>" alt="Screenshot" class="screenshot" style="width: 100%; margin-bottom: 10px; border-radius: 4px;" onclick="openLightbox('<?= htmlspecialchars($screenshot) ?>')">
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
@@ -446,7 +474,29 @@ if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' 
             </div>
         <?php endif; ?>
     </div>
+    
+    <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+        <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+        <img id="lightbox-img" src="" alt="Screenshot">
+    </div>
 
+    <script>
+        function openLightbox(src) {
+            document.getElementById('lightbox').classList.add('active');
+            document.getElementById('lightbox-img').src = src;
+        }
+        
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.remove('active');
+        }
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeLightbox();
+            }
+        });
+    </script>
+    
     <script>
         function playGame() {
             <?php if ($game['hosting_type'] === 'URL'): ?>
