@@ -72,22 +72,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("No game file uploaded");
         }
         
-        // Handle thumbnails
-        if (isset($_FILES['thumbnail_small'])) {
-            $thumb_dir = "uploads/thumbnails/";
-            if (!is_dir($thumb_dir)) mkdir($thumb_dir, 0755, true);
-            $small_path = $thumb_dir . $game_id . '_small.jpg';
-            move_uploaded_file($_FILES['thumbnail_small']['tmp_name'], $small_path);
-            $pdo->prepare("UPDATE games SET thumbnail_small = ? WHERE id = ?")->execute([$small_path, $game_id]);
+        // Validate required media
+        if (!isset($_FILES['thumbnail_small']) || $_FILES['thumbnail_small']['error'] !== UPLOAD_ERR_OK) {
+            throw new Exception("Small thumbnail is required");
+        }
+        if (!isset($_FILES['thumbnail_big']) || $_FILES['thumbnail_big']['error'] !== UPLOAD_ERR_OK) {
+            throw new Exception("Big thumbnail is required");
+        }
+        if (!isset($_FILES['screenshots']) || empty($_FILES['screenshots']['name'][0])) {
+            throw new Exception("At least one screenshot is required");
+        }
+        if (empty($_POST['trailer_url'])) {
+            throw new Exception("Trailer video URL is required");
         }
         
-        if (isset($_FILES['thumbnail_big'])) {
-            $thumb_dir = "uploads/thumbnails/";
-            if (!is_dir($thumb_dir)) mkdir($thumb_dir, 0755, true);
-            $big_path = $thumb_dir . $game_id . '_big.jpg';
-            move_uploaded_file($_FILES['thumbnail_big']['tmp_name'], $big_path);
-            $pdo->prepare("UPDATE games SET thumbnail_big = ? WHERE id = ?")->execute([$big_path, $game_id]);
+        // Handle thumbnails
+        $thumb_dir = "uploads/thumbnails/";
+        if (!is_dir($thumb_dir)) mkdir($thumb_dir, 0755, true);
+        
+        $small_path = $thumb_dir . $game_id . '_small.jpg';
+        move_uploaded_file($_FILES['thumbnail_small']['tmp_name'], $small_path);
+        
+        $big_path = $thumb_dir . $game_id . '_big.jpg';
+        move_uploaded_file($_FILES['thumbnail_big']['tmp_name'], $big_path);
+        
+        // Handle screenshots
+        $screenshots = [];
+        $screenshot_dir = "uploads/screenshots/";
+        if (!is_dir($screenshot_dir)) mkdir($screenshot_dir, 0755, true);
+        
+        foreach ($_FILES['screenshots']['tmp_name'] as $key => $tmp_name) {
+            if ($_FILES['screenshots']['error'][$key] === UPLOAD_ERR_OK) {
+                $screenshot_path = $screenshot_dir . $game_id . '_' . $key . '.jpg';
+                move_uploaded_file($tmp_name, $screenshot_path);
+                $screenshots[] = $screenshot_path;
+            }
         }
+        
+        // Update game with all media
+        $stmt = $pdo->prepare("UPDATE games SET thumbnail_small = ?, thumbnail_big = ?, screenshots = ?, trailer_url = ? WHERE id = ?");
+        $stmt->execute([$small_path, $big_path, json_encode($screenshots), $_POST['trailer_url'], $game_id]);
         
         header('Location: game.php?slug=' . urlencode($slug));
         exit;
@@ -268,13 +292,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="thumb_small">Small Thumbnail</label>
-                    <input type="file" id="thumb_small" name="thumbnail_small" class="form-input file-input" accept="image/*">
+                    <label class="form-label" for="thumb_small">Small Thumbnail *</label>
+                    <input type="file" id="thumb_small" name="thumbnail_small" class="form-input file-input" accept="image/*" required>
+                    <div class="fine-print">Used for game cards and lists</div>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="thumb_big">Big Thumbnail</label>
-                    <input type="file" id="thumb_big" name="thumbnail_big" class="form-input file-input" accept="image/*">
+                    <label class="form-label" for="thumb_big">Big Thumbnail *</label>
+                    <input type="file" id="thumb_big" name="thumbnail_big" class="form-input file-input" accept="image/*" required>
+                    <div class="fine-print">Used for game detail page header</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="screenshots">Screenshots * (1 or more)</label>
+                    <input type="file" id="screenshots" name="screenshots[]" class="form-input file-input" accept="image/*" multiple required>
+                    <div class="fine-print">Upload multiple screenshots to showcase your game</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="trailer_url">Trailer Video URL *</label>
+                    <input type="url" id="trailer_url" name="trailer_url" class="form-input" placeholder="https://youtube.com/watch?v=..." required>
+                    <div class="fine-print">Supports YouTube, Vimeo, Twitch, or direct video links (.mp4, .webm, .ogg)</div>
                 </div>
 
                 <button type="submit" class="submit-button">Upload Game</button>

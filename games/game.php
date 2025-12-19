@@ -270,10 +270,43 @@ if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' 
                     <img src="<?= htmlspecialchars($game['thumbnail_big']) ?>" alt="<?= htmlspecialchars($game['title']) ?>" class="game-thumbnail">
                 <?php endif; ?>
                 
+                <?php if ($game['trailer_url']): ?>
+                    <div class="trailer-section" style="margin-bottom: 20px;">
+                        <h3 style="color: #66c0f4; margin-bottom: 10px;">Trailer</h3>
+                        <?php if (strpos($game['trailer_url'], 'youtube.com') !== false || strpos($game['trailer_url'], 'youtu.be') !== false): ?>
+                            <?php 
+                            $video_id = '';
+                            if (strpos($game['trailer_url'], 'youtube.com') !== false) {
+                                parse_str(parse_url($game['trailer_url'], PHP_URL_QUERY), $params);
+                                $video_id = $params['v'] ?? '';
+                            } elseif (strpos($game['trailer_url'], 'youtu.be') !== false) {
+                                $video_id = basename(parse_url($game['trailer_url'], PHP_URL_PATH));
+                            }
+                            ?>
+                            <iframe width="100%" height="315" src="https://www.youtube.com/embed/<?= htmlspecialchars($video_id) ?>" frameborder="0" allowfullscreen></iframe>
+                        <?php elseif (strpos($game['trailer_url'], 'vimeo.com') !== false): ?>
+                            <?php 
+                            $video_id = basename(parse_url($game['trailer_url'], PHP_URL_PATH));
+                            ?>
+                            <iframe width="100%" height="315" src="https://player.vimeo.com/video/<?= htmlspecialchars($video_id) ?>" frameborder="0" allowfullscreen></iframe>
+                        <?php elseif (strpos($game['trailer_url'], 'twitch.tv') !== false): ?>
+                            <iframe width="100%" height="315" src="<?= htmlspecialchars($game['trailer_url']) ?>" frameborder="0" allowfullscreen></iframe>
+                        <?php else: ?>
+                            <video width="100%" height="315" controls style="background: #000; border-radius: 4px;">
+                                <source src="<?= htmlspecialchars($game['trailer_url']) ?>" type="video/mp4">
+                                <source src="<?= htmlspecialchars($game['trailer_url']) ?>" type="video/webm">
+                                <source src="<?= htmlspecialchars($game['trailer_url']) ?>" type="video/ogg">
+                                Your browser does not support the video tag.
+                            </video>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+                
                 <?php if (!empty($screenshots)): ?>
                     <div class="screenshots">
+                        <h3 style="color: #66c0f4; margin-bottom: 10px;">Screenshots</h3>
                         <?php foreach ($screenshots as $screenshot): ?>
-                            <img src="<?= htmlspecialchars($screenshot) ?>" alt="Screenshot" class="screenshot">
+                            <img src="<?= htmlspecialchars($screenshot) ?>" alt="Screenshot" class="screenshot" style="width: 100%; margin-bottom: 10px; border-radius: 4px;">
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
