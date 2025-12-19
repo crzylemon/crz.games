@@ -19,14 +19,14 @@ class TrailerPlayer {
                     Your browser does not support the video tag.
                 </video>
                 <div class="trailer-controls">
-                    <button class="play-pause-btn">▶️</button>
+                    <button class="play-pause-btn">▶</button>
                     <div class="progress-bar">
                         <div class="progress-fill"></div>
                     </div>
                     <div class="time-display">
                         <span class="current-time">0:00</span> / <span class="duration">0:00</span>
                     </div>
-                    <button class="volume-btn">🔊</button>
+                    <button class="volume-btn">♪</button>
                     <button class="fullscreen-btn">⛶</button>
                 </div>
             </div>
@@ -49,8 +49,8 @@ class TrailerPlayer {
         
         this.video.addEventListener('timeupdate', () => this.updateProgress());
         this.video.addEventListener('loadedmetadata', () => this.updateDuration());
-        this.video.addEventListener('play', () => this.playPauseBtn.textContent = '⏸️');
-        this.video.addEventListener('pause', () => this.playPauseBtn.textContent = '▶️');
+        this.video.addEventListener('play', () => this.playPauseBtn.textContent = '⏸');
+        this.video.addEventListener('pause', () => this.playPauseBtn.textContent = '▶');
         
         this.progressBar.addEventListener('click', (e) => this.seek(e));
     }
@@ -90,7 +90,7 @@ class TrailerPlayer {
     
     toggleMute() {
         this.video.muted = !this.video.muted;
-        this.volumeBtn.textContent = this.video.muted ? '🔇' : '🔊';
+        this.volumeBtn.textContent = this.video.muted ? '✕' : '♪';
     }
     
     toggleFullscreen() {
