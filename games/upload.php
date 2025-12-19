@@ -26,10 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $whitelist_visibility = isset($_POST['whitelist_visibility']) ? 1 : 0;
     $whitelist_play = isset($_POST['whitelist_play']) ? 1 : 0;
     $current_version = $_POST['current_version'] ?? '0.1.0';
+    $e = $_POST['engine'] ?? 'CRENGINE';
     
     try {
-        $stmt = $pdo->prepare("INSERT INTO games (slug, title, description, genre, owner_user_id, hosting_type, game_url, uses_crengine, is_crengine_mod, status, whitelist_visibility, whitelist_play, current_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$slug, $title, $description, $genre, $user['id'], $hosting_type, $game_url, $uses_crengine, $is_crengine_mod, $status, $whitelist_visibility, $whitelist_play, $current_version]);
+        $engine = $_POST['game_engine'] ?? 'Other';
+        $stmt = $pdo->prepare("INSERT INTO games (slug, title, description, genre, owner_user_id, hosting_type, game_url, uses_crengine, is_crengine_mod, status, whitelist_visibility, whitelist_play, current_version, engine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$slug, $title, $description, $genre, $user['id'], $hosting_type, $game_url, $uses_crengine, $is_crengine_mod, $status, $whitelist_visibility, $whitelist_play, $current_version, $engine]);
         
         $game_id = $pdo->lastInsertId();
         
@@ -177,7 +179,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
-    <div class="container">
+    <?php include 'includes/banner.php'; ?>
+    <?php include 'includes/account_nav.php'; ?>
+    <div class="container" style="margin-top: 80px;">
         <div class="game-header">
             <h1 class="game-title">Upload New Game</h1>
             <div class="game-genre">Share your game with the community</div>
@@ -221,8 +225,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">CRENGINE</label>
-                    <label><input type="checkbox" name="uses_crengine" id="crengine"> Uses CREngine</label>
+                    <label class="form-label">Game Engine</label>
+                    <!-- Dropdown for game engines -->
+                    <select name="game_engine" class="form-select">
+                        <option value="CRENGINE">CRENGINE</option>
+                        <option value="Unity">Unity</option>
+                        <option value="Unreal">Unreal Engine</option>
+                        <option value="Godot">Godot</option>
+                        <option value="GameMaker20">Gamemaker (2.0+)</option>
+                        <option value="GameMaker">GameMaker (2.0-)</option>
+                        <option value="Construct">Construct</option>
+                        <option value="Phaser">Phaser</option>
+                        <option value="RPG Maker">RPG Maker</option>
+                        <option value="Scratch">Scratch</option>
+                        <option value="Scratch Mod">Scratch Mod (Turbowarp, Penguinmod, Gandi IDE, etc.)</option>
+                        <option value="Other">Other</option>
+                    </select>
+                    <label><input type="checkbox" name="uses_crengine" id="crengine"> Uses CRENGINE</label>
                     <div id="crengine-mod" style="display:none;">
                         <label><input type="checkbox" name="is_crengine_mod"> Is this game a CRENGINE mod</label>
                     </div>

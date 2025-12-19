@@ -157,8 +157,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
     <?php include 'includes/banner.php'; ?>
-    <button onclick="window.location.href='dashboard.php'" style="position: fixed; top: 20px; right: 20px; background: #2a5298; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; z-index: 1000;">← Back to Dashboard</button>
-    <div class="container">
+    <?php include 'includes/account_nav.php'; ?>
+    <div class="container" style="margin-top: 80px;">
         <div class="game-header">
             <h1 class="game-title">Edit Game</h1>
             <div class="game-genre">Update your game details</div>

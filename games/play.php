@@ -6,6 +6,7 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 require_once '../user/session.php';
+require_once 'includes/admin.php';
 $user = getCurrentUser();
 $slug = $_GET['slug'] ?? '';
 if (empty($slug)) {
@@ -23,9 +24,7 @@ try {
         echo "Game not found";
         exit;
     }
-    //$game['status'] === 'PLAYABLE' || $user['id'] === 1 || $user['id'] === $game['owner_user_id']
-    // if this does not match, error with "No access"
-    if (!($game['status'] === 'PLAYABLE' || $user['id'] === 1 || $user['id'] === $game['owner_user_id']) || $user['id'] === 2) {
+    if (!($game['status'] === 'PLAYABLE' || isAdmin($user['id']) || $user['id'] === $game['owner_user_id']) || $user['id'] === 2) {
         header('HTTP/1.0 403 Forbidden');
         echo "Game is not playable";
         exit;
@@ -42,10 +41,10 @@ try {
 if ($game['uses_crengine']) {
     $gameUrl = "/games/crengine.html?game={$game['id']}";
 } else {
-    $gameUrl = $game['hosting_type'] === 'URL' ? $game['game_url'] : "/games/uploads/games/{$game['slug']}/{$game['entry_file']}";
+    $gameUrl = $game['hosting_type'] === 'URL' ? $game['game_url'] : "/games/uploads/games/{$game['id']}/{$game['entry_file']}";
 }
 // if the game is rejected, pending approval, draft, or whitelisted (where you're not on list) then kick out
-if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' || ($user && ($user['id'] === 1 || $user['id'] === $game['owner_user_id'])))) {
+if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' || ($user && (isAdmin($user['id']) || $user['id'] === $game['owner_user_id'])))) {
     header('Location: /games/');
     exit;
 }

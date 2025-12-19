@@ -240,3 +240,11 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+a {
+    color: #eff3ff;
+}
+
+a:visited {
+    color: #b7c9ff;
+}
