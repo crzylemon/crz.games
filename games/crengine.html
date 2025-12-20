@@ -111,7 +111,7 @@ fetch(`${baseURL}${gameName}/bin/client.cre?v=${Date.now()}`)
     if (!firstLine.startsWith('//{"META":')) {
         cre.Msg("No meta tag");
         try {
-            new Function("CRE", code)(cre);
+            new Function("ENGINE", code)(cre);
         } catch (e) {
             showError(e);
         }
@@ -124,10 +124,10 @@ fetch(`${baseURL}${gameName}/bin/client.cre?v=${Date.now()}`)
         
         if (meta.META && meta.META.version && meta.META.version !== cre.version) {
             if (confirm(`Wrong version, do you want to try anyway?`)) {
-                new Function("CRE", code)(cre);
+                new Function("ENGINE", code)(cre);
             }
         } else {
-            new Function("CRE", code)(cre);
+            new Function("ENGINE", code)(cre);
         }
     } catch (e) {
         if (e.name === 'SyntaxError') {
@@ -143,7 +143,7 @@ fetch(`${baseURL}${gameName}/bin/client.cre?v=${Date.now()}`)
       .then(code => {
         gameCode = code;
         try {
-            new Function("CRE", code)(cre);
+            new Function("ENGINE", code)(cre);
         } catch (e) {
             showError(e);
         }
