@@ -19,7 +19,7 @@ document.getElementById('bundleBtn').onclick = async () => {
     const nonRelease = document.getElementById('nonRelease').checked;
     
     if (!files.length) return alert('No JS files found');
-    let pre = '//{"META": {"version": "mega-2"}}\n'
+    let pre = '//{"META": {"version": "mega-2-1"}}\n'
     let bundle = '// CRENGINE Bundle\n';
     
     for (const file of files) {

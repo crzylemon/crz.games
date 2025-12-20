@@ -8,7 +8,7 @@ class CRE {
             this.crzgames = true;
             this.base = "uploads/games/";
         }
-        this.version = "mega-2"
+        this.version = "mega-2-1"
         this.canvas = canvas;
         this.container = document.getElementById("gamecontainer");
         
@@ -34,8 +34,9 @@ class CRE {
         this.guiCanvas.style.left = '0';
         this.guiCanvas.style.width = '100%';
         this.guiCanvas.style.height = '100%';
-        this.guiCanvas.style.pointerEvents = 'none';
+
         this.guiCanvas.style.zIndex = '10';
+        this.guiCanvas.style.pointerEvents = 'none';
         this.guiCanvas.style.background = 'transparent';
         this.container.appendChild(this.guiCanvas);
         this.ctx = this.guiCanvas.getContext('2d');
@@ -43,9 +44,23 @@ class CRE {
         this.keys = {};
         this.mouseDelta = { x: 0, y: 0 };
         this.mouseCapture = false;
+        this.lastMousePos = { x: 0, y: 0 };
+        
+        // Mouse delta tracking
         this.entities = [];
         this.EntityClasses = {};
         this.RUN_TYPE = "CLIENT"; // Can be CLIENT, SERVER, SHARED
+        this.uiElements = [];
+        this.loading = false;
+        this.loadingScreen = {
+            background: '#000',
+            text: 'Loading...',
+            textColor: '#fff',
+            font: '24px Arial',
+            progress: 0,
+            showProgress: true
+        };
+        this.preloadQueue = [];
         this.consoleOpen = false;
         this.consoleHistory = [];
         this.Transform = Transform;
@@ -95,10 +110,16 @@ class CRE {
         console.log("CRE initialized for game:", game);
         console.log("this.game: ", this.game);
         // add convar for cheats and stuff
-        this.cheats = this.RegisterConVar("sv_cheats", "0", FCVAR_CHEAT, "Enable cheat commands");
+        this.cheats = this.RegisterConVar("sv_cheats", "0", FCVAR_PROTECTED, "Enable cheat commands");
         this.fov = this.RegisterConVar("fov", "60", FCVAR_NONE, "Camera field of view");
         this.nearplane = this.RegisterConVar("near_plane", "0.01", FCVAR_NONE, "Near clipping plane");
         this.farplane = this.RegisterConVar("far_plane", "1000", FCVAR_NONE, "Far clipping plane");
+        
+        // Color correction
+        this.brightness = this.RegisterConVar("r_brightness", "1.0", FCVAR_NONE, "Brightness adjustment");
+        this.contrast = this.RegisterConVar("r_contrast", "1.1", FCVAR_NONE, "Contrast adjustment");
+        this.saturation = this.RegisterConVar("r_saturation", "1.2", FCVAR_NONE, "Saturation adjustment");
+        this.gamma = this.RegisterConVar("r_gamma", "2.2", FCVAR_NONE, "Gamma correction");
         
         // Register built-in commands
         this.RegisterConCommand("ent_spawn", (...args) => this.SpawnEntity(args[0], ...args.slice(1)), FCVAR_CHEAT, "Spawn an entity");
@@ -159,11 +180,17 @@ class CRE {
             if (Object.keys(this.keyBinds).length === 0) {
                 this.addToConsole("No key binds");
             } else {
+                this.addToConsole("Current key binds:");
                 Object.entries(this.keyBinds).forEach(([key, cmd]) => {
-                    this.addToConsole(`${key} = "${cmd}"`);
+                    this.addToConsole(`  ${key} = "${cmd}"`);
                 });
             }
         }, FCVAR_NONE, "List all key binds");
+        this.RegisterConCommand("unbindall", () => {
+            this.keyBinds = {};
+            this.saveBinds();
+            this.addToConsole("All key binds cleared");
+        }, FCVAR_NONE, "Clear all key binds");
         this.RegisterConCommand("toggledebug", () => this.debug = !this.debug, FCVAR_NONE, "Toggle debug display");
         this.RegisterConCommand("toggleconsole", () => this.toggleConsole(), FCVAR_NONE, "Toggle console visibility");
         this.RegisterConCommand("echo", (echo) => this.addToConsole(echo), FCVAR_NONE, "Echo to console");
@@ -228,6 +255,18 @@ class CRE {
                 this.addToConsole(`  ${key} = ${value}`);
             }
         }, FCVAR_NONE, "List script variables");
+        this.RegisterConCommand("light_list", () => {
+            const lights = this.entities.filter(ent => 
+                ent.constructor.name === 'Light' || 
+                ent.constructor.name === 'LightSpot' || 
+                ent.constructor.name === 'LightSun'
+            );
+            this.addToConsole(`Found ${lights.length} lights:`);
+            lights.forEach((light, i) => {
+                const pos = light.CRE.transform.position;
+                this.addToConsole(`  ${i}: ${light.constructor.name} at (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}) intensity=${light.CRE.intensity}`);
+            });
+        }, FCVAR_NONE, "List all lights in scene");
 
         this.RegisterConCommand("help", (command) => {
             if (command) {
@@ -294,14 +333,59 @@ class CRE {
         
         document.addEventListener('pointerlockchange', () => {
             this.mouseCapture = document.pointerLockElement === this.canvas;
-        });
-        
-        document.addEventListener('mousemove', e => {
-            if (this.mouseCapture && !this.consoleOpen) {
-                this.mouseDelta.x += e.movementX;
-                this.mouseDelta.y += e.movementY;
+            if (!this.mouseCapture) {
+                this.mouseDelta.x = 0;
+                this.mouseDelta.y = 0;
             }
         });
+        document.addEventListener('mousemove', e => {
+            this.lastMousePos.x = e.clientX;
+            this.lastMousePos.y = e.clientY;
+            if (this.mouseCapture && !this.consoleOpen) {
+                this.mouseDelta.x = e.movementX || 0;
+                this.mouseDelta.y = e.movementY || 0;
+            }
+        });
+        
+        // UI click handling
+        this.guiCanvas.style.pointerEvents = 'none';
+        this.guiCanvas.addEventListener('click', e => {
+            const rect = this.guiCanvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (this.guiCanvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (this.guiCanvas.height / rect.height);
+            
+            this.uiElements.forEach(element => {
+                if (element.type === 'button' && element.visible && element.onClick) {
+                    if (x >= element.x && x <= element.x + element.width &&
+                        y >= element.y && y <= element.y + element.height) {
+                        element.onClick();
+                    }
+                }
+            });
+        });
+        
+        // Enable pointer events only when UI elements exist
+        this.updateGUIPointerEvents = () => {
+            if (!this.lastMousePos.x && !this.lastMousePos.y) return;
+            
+            const rect = this.guiCanvas.getBoundingClientRect();
+            const mouseX = (this.lastMousePos.x - rect.left) * (this.guiCanvas.width / rect.width);
+            const mouseY = (this.lastMousePos.y - rect.top) * (this.guiCanvas.height / rect.height);
+            
+            // Only check if mouse coordinates are valid
+            if (mouseX < 0 || mouseY < 0 || mouseX > this.guiCanvas.width || mouseY > this.guiCanvas.height) {
+                this.guiCanvas.style.pointerEvents = 'none';
+                return;
+            }
+            
+            const overButton = this.uiElements.some(el => 
+                el.type === 'button' && el.visible &&
+                mouseX >= el.x && mouseX <= el.x + el.width &&
+                mouseY >= el.y && mouseY <= el.y + el.height
+            );
+            
+            this.guiCanvas.style.pointerEvents = overButton ? 'auto' : 'none';
+        };
 
         // Set fixed canvas size
         this.canvas.width = this._width;
@@ -587,17 +671,25 @@ class CRE {
     
     // Load map from JSON
     LoadMap(mapData) {
-        this.UTIL_RESET();
+        // Don't call UTIL_RESET here - it causes infinite loops
         this.brushes = [];
         
         // Load entities
         mapData.entities?.forEach(ent => {
-            const instance = this.SpawnEntity(ent.type, ...ent.args || []);
-            if (instance && ent.position) {
-                instance.transform?.setPosition(...ent.position);
-            }
-            if (instance && ent.scale) {
-                instance.transform?.setScale(...ent.scale);
+            try {
+                const instance = this.SpawnEntity(ent.type, ...ent.args || []);
+                if (instance && instance.CRE && instance.CRE.transform) {
+                    if (ent.position) {
+                        instance.CRE.transform.setPosition(...ent.position);
+                    }
+                    if (ent.scale) {
+                        instance.CRE.transform.setScale(...ent.scale);
+                    }
+                } else if (!instance) {
+                    this.addToConsole(`Warning: Failed to spawn entity '${ent.type}'`);
+                }
+            } catch (e) {
+                this.addToConsole(`Error spawning entity '${ent.type}': ${e.message}`);
             }
         });
         
@@ -835,17 +927,64 @@ class CRE {
         );
     }
     
-    // Auto-load map function for game code
+    // Auto-load map function with loading screen
     LoadMapFromName(mapName) {
+        this.showLoadingScreen();
+        
         fetch(`${this.base}${this.game}/maps/${mapName}.map?v=${Date.now()}`)
             .then(r => r.json())
-            .then(data => {
+            .then(async data => {
+                await this.preloadMapAssets(data);
                 this.LoadMap(data);
+                this.hideLoadingScreen();
                 console.log(`Auto-loaded map: ${mapName}`);
             })
             .catch(err => {
+                this.hideLoadingScreen();
                 console.warn(`Failed to auto-load map: ${mapName}`, err);
             });
+    }
+    
+    async preloadMapAssets(mapData) {
+        const textures = new Set();
+        
+        // Collect brush textures
+        mapData.brushes?.forEach(brush => {
+            if (brush.texture && !brush.texture.startsWith('#')) {
+                textures.add(`${this.base}${this.game}/materials/${brush.texture}`);
+            }
+        });
+        
+        // Preload entity textures
+        this.entities.forEach(entity => {
+            if (entity.preloadTextures) {
+                entity.preloadTextures().forEach(tex => textures.add(tex));
+            }
+        });
+        
+        // Load all textures
+        const textureArray = Array.from(textures);
+        for (let i = 0; i < textureArray.length; i++) {
+            await this.preloadTexture(textureArray[i]);
+            this.loadingScreen.progress = (i + 1) / textureArray.length;
+        }
+    }
+    
+    preloadTexture(url) {
+        return new Promise((resolve) => {
+            if (this.textures.has(url)) {
+                resolve();
+                return;
+            }
+            
+            const img = new Image();
+            img.onload = () => {
+                this.loadTexture(url);
+                resolve();
+            };
+            img.onerror = () => resolve(); // Continue even if texture fails
+            img.src = url;
+        });
     }
     
     // Save binds to localStorage
@@ -879,18 +1018,109 @@ class CRE {
         console.log(text);
         if (this.consoleOpen) this.addToConsole(text);
     }
-    UTIL_RESET() { this.Msg("Game Reset!"); this.entities = []; }
+    UTIL_RESET() { 
+        const stack = new Error().stack;
+        this.Msg(`Game Reset! Called from: ${stack.split('\n')[2]?.trim() || 'unknown'}`); 
+        this.entities = []; 
+        this.uiElements = []; 
+        this.brushes = [];
+        this.physics.bodies = [];
+        this.camera.position = new Vector(0, 0, -10);
+        this.camera.rotation = new Vector(0, 0, 0);
+        if (this.network.connected) this.network.players.clear();
+        // Only auto-reload game code if explicitly requested (not from automatic resets)
+        if (gameCode && !this.resetting && this.autoReloadGameCode !== false) {
+            this.resetting = true;
+            try {
+                new Function("ENGINE", gameCode)(this);
+            } catch (e) {
+                showError(e);
+            }
+            this.resetting = false;
+        }
+    }
     UTIL_REMOVE(entity) { this.entities = this.entities.filter(e => e !== entity); }
     
-    // Simple GUI system
+    // UI Methods
+    addUIText(id, text, x, y, options = {}) {
+        this.uiElements.push({
+            id, type: 'text', text, x, y,
+            color: options.color || 'white',
+            font: options.font || '16px Arial',
+            visible: true
+        });
+    }
+    
+    addUIRect(id, x, y, width, height, color = 'white') {
+        this.uiElements.push({
+            id, type: 'rect', x, y, width, height, color, visible: true
+        });
+    }
+    
+    addUIButton(id, text, x, y, width, height, onClick, options = {}) {
+        this.uiElements.push({
+            id, type: 'button', text, x, y, width, height, onClick,
+            bgColor: options.bgColor || '#333',
+            textColor: options.textColor || 'white',
+            borderColor: options.borderColor || '#fff',
+            font: options.font || '16px Arial',
+            visible: true
+        });
+    }
+    
+    removeUIElement(id) {
+        this.uiElements = this.uiElements.filter(e => e.id !== id);
+    }
+    
+    getUIElement(id) {
+        return this.uiElements.find(e => e.id === id);
+    }
+    
+    // Loading screen methods
+    showLoadingScreen() {
+        this.loading = true;
+        this.loadingScreen.progress = 0;
+    }
+    
+    hideLoadingScreen() {
+        this.loading = false;
+    }
+    
+    setLoadingScreen(options) {
+        Object.assign(this.loadingScreen, options);
+    }
+    
+    // Entity texture preloading
+    preloadEntityTextures(textures) {
+        textures.forEach(url => {
+            this.preloadQueue.push(url);
+        });
+    }
+    
+    // UI System
     drawGUI() {
+        this.ctx.clearRect(0, 0, this.guiCanvas.width, this.guiCanvas.height);
+        
+        // Update pointer events based on visible UI elements
+        this.updateGUIPointerEvents();
+        
+        // Draw loading screen if active
+        if (this.loading) {
+            this.drawLoadingScreen();
+            return;
+        }
+        
+        // Draw custom UI elements
+        this.uiElements.forEach(element => {
+            if (element.visible) this.drawUIElement(element);
+        });
+        
+        // Debug info
         if (this.debug && this.ctx) {
-            this.ctx.clearRect(0, 0, this.guiCanvas.width, this.guiCanvas.height);
             this.ctx.fillStyle = "white";
             this.ctx.font = "12px monospace";
             this.ctx.fillText(`Entities: ${this.entities.length}`, 10, 20);
         
-            // Calculate FPS with proper bounds
             const frameTime = performance.now() - this.lastTime;
             const fps = frameTime > 0 ? Math.min(Math.round(1000 / frameTime), 999) : 0;
             const addplus = fps === 999 ? "+" : "";
@@ -903,6 +1133,77 @@ class CRE {
                 this.ctx.fillText(`Rot: ${this.camera.rotation.x.toFixed(1)}, ${this.camera.rotation.y.toFixed(1)}, ${this.camera.rotation.z.toFixed(1)}`, 10, 80);
             }
         }
+    }
+    
+    drawLoadingScreen() {
+        const ctx = this.ctx;
+        const w = this.guiCanvas.width;
+        const h = this.guiCanvas.height;
+        
+        // Background
+        ctx.fillStyle = this.loadingScreen.background;
+        ctx.fillRect(0, 0, w, h);
+        
+        // Loading text
+        ctx.fillStyle = this.loadingScreen.textColor;
+        ctx.font = this.loadingScreen.font;
+        const textWidth = ctx.measureText(this.loadingScreen.text).width;
+        ctx.fillText(this.loadingScreen.text, (w - textWidth) / 2, h / 2 - 50);
+        
+        // Progress bar
+        if (this.loadingScreen.showProgress) {
+            const barWidth = 300;
+            const barHeight = 20;
+            const barX = (w - barWidth) / 2;
+            const barY = h / 2;
+            
+            // Progress bar background
+            ctx.fillStyle = '#333';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            // Progress bar fill
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(barX, barY, barWidth * this.loadingScreen.progress, barHeight);
+            
+            // Progress text
+            const percent = Math.round(this.loadingScreen.progress * 100);
+            ctx.fillStyle = this.loadingScreen.textColor;
+            ctx.font = '16px Arial';
+            const percentText = `${percent}%`;
+            const percentWidth = ctx.measureText(percentText).width;
+            ctx.fillText(percentText, (w - percentWidth) / 2, barY + 40);
+        }
+    }
+    
+    drawUIElement(element) {
+        this.ctx.save();
+        
+        switch (element.type) {
+            case 'text':
+                this.ctx.fillStyle = element.color || 'white';
+                this.ctx.font = element.font || '16px Arial';
+                this.ctx.fillText(element.text, element.x, element.y);
+                break;
+                
+            case 'rect':
+                this.ctx.fillStyle = element.color || 'white';
+                this.ctx.fillRect(element.x, element.y, element.width, element.height);
+                break;
+                
+            case 'button':
+                this.ctx.fillStyle = element.bgColor || '#333';
+                this.ctx.fillRect(element.x, element.y, element.width, element.height);
+                this.ctx.strokeStyle = element.borderColor || '#fff';
+                this.ctx.strokeRect(element.x, element.y, element.width, element.height);
+                this.ctx.fillStyle = element.textColor || 'white';
+                this.ctx.font = element.font || '16px Arial';
+                const textX = element.x + element.width / 2 - this.ctx.measureText(element.text).width / 2;
+                const textY = element.y + element.height / 2 + 6;
+                this.ctx.fillText(element.text, textX, textY);
+                break;
+        }
+        
+        this.ctx.restore();
     }
 
     // 3D projection with camera rotation
@@ -1418,6 +1719,41 @@ class CRE {
         }
         return null;
     }
+    
+    boxModelCollision(boxPos, boxSize, modelEntity) {
+        if (!modelEntity.CRE || !modelEntity.CRE.model || !modelEntity.CRE.transform) return null;
+        
+        const model = this.getModel(modelEntity.CRE.model);
+        if (!model) return null;
+        
+        const transform = modelEntity.CRE.transform;
+        
+        // Check each face of the model
+        for (const obj of model.objects) {
+            for (const face of obj.faces) {
+                if (face.length >= 3) {
+                    for (let i = 1; i < face.length - 1; i++) {
+                        const v1Idx = face[0][0] - 1;
+                        const v2Idx = face[i][0] - 1;
+                        const v3Idx = face[i + 1][0] - 1;
+                        
+                        if (v1Idx >= 0 && v2Idx >= 0 && v3Idx >= 0 && 
+                            v1Idx < obj.vertices.length && v2Idx < obj.vertices.length && v3Idx < obj.vertices.length) {
+                            
+                            const v1 = this.transformVertex(obj.vertices[v1Idx], transform);
+                            const v2 = this.transformVertex(obj.vertices[v2Idx], transform);
+                            const v3 = this.transformVertex(obj.vertices[v3Idx], transform);
+                            
+                            const collision = this.boxTriangleCollision(boxPos, boxSize, v1, v2, v3);
+                            if (collision) return collision;
+                        }
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
 
     // Main game loop
     gameLoop(now) {
@@ -1447,6 +1783,10 @@ class CRE {
                 }
             }
         });
+        
+        // Reset mouse delta after entities have used it
+        this.mouseDelta.x = 0;
+        this.mouseDelta.y = 0;
         
         // Broadcast player updates (throttled)
         if (this.network.connected && now % 100 < 16) {
@@ -1883,9 +2223,10 @@ class CRE {
             );
             
             const color = this.hexToRgb(item.color);
-            const r = (color.r / 255) * item.shade;
-            const g = (color.g / 255) * item.shade;
-            const b = (color.b / 255) * item.shade;
+            const corrected = this.applyColorCorrection(color.r, color.g, color.b);
+            const r = (corrected.r / 255) * item.shade;
+            const g = (corrected.g / 255) * item.shade;
+            const b = (corrected.b / 255) * item.shade;
             
             colors.push(
                 r, g, b, r, g, b, r, g, b
@@ -1989,7 +2330,8 @@ class CRE {
             
             // Set base color from first item (all items in group have same texture)
             const baseColor = this.hexToRgb(items[0].color);
-            gl.uniform3f(programInfo.uniformLocations.uBaseColor, baseColor.r / 255, baseColor.g / 255, baseColor.b / 255);
+            const corrected = this.applyColorCorrection(baseColor.r, baseColor.g, baseColor.b);
+            gl.uniform3f(programInfo.uniformLocations.uBaseColor, corrected.r / 255, corrected.g / 255, corrected.b / 255);
             
             const texture = this.loadTexture(textureUrl);
             gl.activeTexture(gl.TEXTURE0);
@@ -2128,6 +2470,42 @@ class CRE {
         } : { r: 255, g: 0, b: 255 };
     }
     
+    applyColorCorrection(r, g, b) {
+        const brightness = parseFloat(this.GetConVar("r_brightness")) || 1.0;
+        const contrast = parseFloat(this.GetConVar("r_contrast")) || 1.0;
+        const saturation = parseFloat(this.GetConVar("r_saturation")) || 1.0;
+        const gamma = parseFloat(this.GetConVar("r_gamma")) || 2.2;
+        
+        // Normalize to 0-1
+        r /= 255; g /= 255; b /= 255;
+        
+        // Brightness
+        r *= brightness; g *= brightness; b *= brightness;
+        
+        // Contrast
+        r = (r - 0.5) * contrast + 0.5;
+        g = (g - 0.5) * contrast + 0.5;
+        b = (b - 0.5) * contrast + 0.5;
+        
+        // Saturation
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = gray + saturation * (r - gray);
+        g = gray + saturation * (g - gray);
+        b = gray + saturation * (b - gray);
+        
+        // Gamma
+        r = Math.pow(Math.max(0, r), 1.0 / gamma);
+        g = Math.pow(Math.max(0, g), 1.0 / gamma);
+        b = Math.pow(Math.max(0, b), 1.0 / gamma);
+        
+        // Clamp and convert back to 0-255
+        return {
+            r: Math.max(0, Math.min(255, r * 255)),
+            g: Math.max(0, Math.min(255, g * 255)),
+            b: Math.max(0, Math.min(255, b * 255))
+        };
+    }
+    
     calculateLighting(position, normal) {
         let totalLight = 0.2; // Ambient light
         
@@ -2137,7 +2515,8 @@ class CRE {
             ent.constructor.name === 'LightSpot' || 
             ent.constructor.name === 'LightSun'
         );
-        
+        // if no lights found, just make fullbright
+        if (lights.length === 0) return 1.0;
         lights.forEach(light => {
             if (light.constructor.name === 'LightSun') {
                 // Directional light
@@ -2750,7 +3129,7 @@ const gameName = urlParams.get('game') || 'game';
 const cre = new CRE(document.getElementById("gameCanvas"), gameName);
 console.log("CRENGINE initialized");
 console.log("Loading game:", gameName);
-window.CRE = cre; // Make CRE instance globally available
+window.engine = cre; // Make CRE instance globally available
 
 // Get game name from URL parameter
 
@@ -2789,7 +3168,7 @@ function restartGame() {
     cre.UTIL_RESET();
     if (gameCode) {
         try {
-            new Function("CRE", gameCode)(cre);
+            new Function("ENGINE", gameCode)(cre);
         } catch (e) {
             showError(e);
         }
