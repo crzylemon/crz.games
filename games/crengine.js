@@ -22,8 +22,8 @@ class CRE {
         this.initWebGL();
         
         // Set dimensions first
-        this._width = 1280;
-        this._height = 720;
+        this._width = 1920;
+        this._height = 1080;
         
         // Create overlay canvas for GUI
         this.guiCanvas = document.createElement('canvas');
