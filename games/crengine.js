@@ -739,16 +739,18 @@ class CRE {
     }
     
     sendChatMessage(message) {
+        const displayName = this.network.user?.display || this.network.playerId;
+        
         if (this.network.connected) {
             this.sendMessage({
                 type: 'chat_message',
                 message: message,
-                displayName: this.network.user?.display || this.network.playerId
+                displayName: displayName
             });
-        } else {
-            // If not connected, just show locally
-            this.addChatMessage(this.network.user?.display || 'You', message);
         }
+        
+        // Always show locally for sender
+        this.addChatMessage(displayName, message);
     }
     
     addChatMessage(playerId, message) {
