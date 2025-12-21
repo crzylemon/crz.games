@@ -70,6 +70,14 @@ class CRE {
         this.game = game;
         this.debug = false;
         
+        // Chat system
+        this.chat = {
+            open: false,
+            messages: [],
+            maxMessages: 50,
+            inputElement: null
+        };
+        
         // Triangle intersection system
         this.intersectionGrid = new Map();
         this.gridSize = 200; // Larger grid for better performance
@@ -232,13 +240,13 @@ class CRE {
             }
             this.addToConsole(`Shadows: ${this.shadows.enabled ? 'ON' : 'OFF'}`);
         }, FCVAR_NONE, "Toggle shadow mapping");
-        this.RegisterConCommand("connect", (address) => {
-            this.connectToServer(address || 'ws://localhost:8080');
-        }, FCVAR_NONE, "Connect to multiplayer server");
-        this.RegisterConCommand("host", () => {
-            this.addToConsole("Starting local server...");
-            this.network.isHost = true;
-        }, FCVAR_NONE, "Host multiplayer game");
+        this.RegisterConCommand("host", (port = 27015) => {
+            this.startLANServer();
+        }, FCVAR_NONE, "Host LAN server");
+        this.RegisterConCommand("connect", (ip, port = 27015) => {
+            if (ip) this.connectToLAN(ip, parseInt(port));
+            else this.addToConsole("Usage: connect <ip> [port]");
+        }, FCVAR_NONE, "Connect to LAN server");
         this.RegisterConCommand("disconnect", () => {
             this.disconnectFromServer();
         }, FCVAR_NONE, "Disconnect from server");
@@ -255,6 +263,11 @@ class CRE {
                 this.addToConsole(`  ${key} = ${value}`);
             }
         }, FCVAR_NONE, "List script variables");
+        this.RegisterConCommand("say", () => {
+            if (this.chat) {
+                this.openChat();
+            }
+        }, FCVAR_NONE, "Open chat to send a message");
         this.RegisterConCommand("light_list", () => {
             const lights = this.entities.filter(ent => 
                 ent.constructor.name === 'Light' || 
@@ -297,6 +310,9 @@ class CRE {
                 });
             }
         }, FCVAR_NONE, "Get help with a command or list all commands");
+        
+        // Initialize chat system
+        this.initChat();
         // 3D Camera
         this.camera = {
             position: new Vector(0, 0, -10),
@@ -311,17 +327,25 @@ class CRE {
 
         // Setup input
         window.addEventListener("keydown", e => {
-            if (!this.consoleOpen) {
+            if (!this.consoleOpen && !this.chat.open) {
                 this.keys[e.key] = true;
             }
-            // Check for key binds (only when console is closed or for special keys)
-            if (this.keyBinds[e.key.toLowerCase()] && (!this.consoleOpen || e.key === '`')) {
+            
+            // Chat key (y)
+            if (e.key === 'y' && !this.consoleOpen && !this.chat.open) {
+                e.preventDefault();
+                this.openChat();
+                return;
+            }
+            
+            // Check for key binds (only when console and chat are closed or for special keys)
+            if (this.keyBinds[e.key.toLowerCase()] && ((!this.consoleOpen && !this.chat.open) || e.key === '`')) {
                 e.preventDefault();
                 this.ConsoleHandler(...this.keyBinds[e.key.toLowerCase()].split(' '));
             }
         });
         window.addEventListener("keyup", e => {
-            if (!this.consoleOpen) this.keys[e.key] = false;
+            if (!this.consoleOpen && !this.chat.open) this.keys[e.key] = false;
         });
         
         // Mouse capture and movement
@@ -341,7 +365,7 @@ class CRE {
         document.addEventListener('mousemove', e => {
             this.lastMousePos.x = e.clientX;
             this.lastMousePos.y = e.clientY;
-            if (this.mouseCapture && !this.consoleOpen) {
+            if (this.mouseCapture && !this.consoleOpen && !this.chat.open) {
                 this.mouseDelta.x = e.movementX || 0;
                 this.mouseDelta.y = e.movementY || 0;
             }
@@ -572,6 +596,11 @@ class CRE {
                 this.addToConsole(`Can't execute ${command}, cheats are not enabled.`);
                 return;
             }
+            // Check if it's a protected command and user is not host
+            if (concommand.hasFlag(FCVAR_PROTECTED) && !this.network.isHost) {
+                this.addToConsole(`Can't execute ${command}, only server host can use this.`);
+                return;
+            }
             concommand.execute(...args);
             return;
         }
@@ -583,6 +612,11 @@ class CRE {
                 // Check if it's a cheat convar and cheats are disabled
                 if (convar.hasFlag(FCVAR_CHEAT) && this.GetConVar("sv_cheats") !== "1") {
                     this.addToConsole(`Can't change ${command}, cheats are not enabled.`);
+                    return;
+                }
+                // Check if it's a protected convar and user is not host
+                if (convar.hasFlag(FCVAR_PROTECTED) && !this.network.isHost) {
+                    this.addToConsole(`Can't change ${command}, only server host can use this.`);
                     return;
                 }
                 convar.value = args[0];
@@ -629,7 +663,9 @@ class CRE {
         // Only spawn if run type matches
         if (runType === this.RUN_TYPE || runType === this.Enums.RunType.SHARED) {
             const instance = new cls(...args);
-            if (instance.init) instance.init();
+            if (instance.init && (!instance.CRE || !instance.CRE.multiplayer || instance.CRE.isClient === true)) {
+                instance.init();
+            }
             
             // Auto-add physics if usePhysics is true
             if (instance.CRE && instance.CRE.usePhysics) {
@@ -647,6 +683,95 @@ class CRE {
         return null;
     }
 
+    // Chat system methods
+    initChat() {
+        // Create chat UI elements
+        this.addUIText('chat-messages', '', 10, this._height - 200, { color: 'white', font: '14px Arial' });
+        
+        // Create chat input element
+        this.chat.inputElement = document.createElement('input');
+        this.chat.inputElement.type = 'text';
+        this.chat.inputElement.id = 'chat-input';
+        this.chat.inputElement.style.cssText = `
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            width: 300px;
+            padding: 5px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: 1px solid #555;
+            font-family: Arial;
+            font-size: 14px;
+            display: none;
+            z-index: 1000;
+        `;
+        
+        this.chat.inputElement.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const message = this.chat.inputElement.value.trim();
+                if (message) {
+                    this.sendChatMessage(message);
+                    this.chat.inputElement.value = '';
+                }
+                this.closeChat();
+            } else if (e.key === 'Escape') {
+                this.chat.inputElement.value = '';
+                this.closeChat();
+            }
+        });
+        
+        if (this.container) {
+            this.container.appendChild(this.chat.inputElement);
+        }
+    }
+    
+    openChat() {
+        this.chat.open = true;
+        this.chat.inputElement.style.display = 'block';
+        this.chat.inputElement.focus();
+    }
+    
+    closeChat() {
+        this.chat.open = false;
+        this.chat.inputElement.style.display = 'none';
+        this.chat.inputElement.blur();
+    }
+    
+    sendChatMessage(message) {
+        if (this.network.connected) {
+            this.sendMessage({
+                type: 'chat_message',
+                message: message,
+                displayName: this.network.user?.display || this.network.playerId
+            });
+        } else {
+            // If not connected, just show locally
+            this.addChatMessage(this.network.user?.display || 'You', message);
+        }
+    }
+    
+    addChatMessage(playerId, message) {
+        this.chat.messages.push({ playerId, message });
+        
+        // Keep only last maxMessages
+        if (this.chat.messages.length > this.chat.maxMessages) {
+            this.chat.messages.shift();
+        }
+        
+        this.updateChatDisplay();
+    }
+    
+    updateChatDisplay() {
+        const chatElement = this.getUIElement('chat-messages');
+        if (chatElement) {
+            const displayMessages = this.chat.messages.slice(-5); // Show last 5 messages
+            chatElement.text = displayMessages.map(msg => 
+                `${msg.playerId}: ${msg.message}`
+            ).join('\n');
+        }
+    }
+    
     // Check if a key is pressed
     isKeyPressed(key) {
         return !!this.keys[key];
@@ -1182,7 +1307,15 @@ class CRE {
             case 'text':
                 this.ctx.fillStyle = element.color || 'white';
                 this.ctx.font = element.font || '16px Arial';
-                this.ctx.fillText(element.text, element.x, element.y);
+                // Handle multi-line text
+                if (element.text.includes('\n')) {
+                    const lines = element.text.split('\n');
+                    lines.forEach((line, index) => {
+                        this.ctx.fillText(line, element.x, element.y + (index * 16));
+                    });
+                } else {
+                    this.ctx.fillText(element.text, element.x, element.y);
+                }
                 break;
                 
             case 'rect':
@@ -1777,6 +1910,11 @@ class CRE {
         this.entities.forEach(ent => {
             if (ent.update) {
                 try {
+                    // Only skip if it's explicitly a remote multiplayer entity
+                    const cre = ent.CRE;
+                    if (this.network.connected && cre && cre.multiplayer && cre.isClient === false) {
+                        return;
+                    }
                     ent.update(dt, this);
                 } catch (e) {
                     if (!gameHalted) showError(e);
@@ -1788,9 +1926,9 @@ class CRE {
         this.mouseDelta.x = 0;
         this.mouseDelta.y = 0;
         
-        // Broadcast player updates (throttled)
+        // Broadcast entity updates (throttled)
         if (this.network.connected && now % 100 < 16) {
-            this.broadcastPlayerUpdate();
+            this.broadcastEntityUpdate();
         }
         
         // Check script triggers
@@ -1933,6 +2071,10 @@ class CRE {
     }
     
     loadTexture(url) {
+        // if doesn't start with {baseurl}{gamename}/materials, then put that there
+        if (!url.startsWith(`${this.base}${this.game}/materials/`)) {
+            url = `${this.base}${this.game}/materials/${url}`;
+        }
         if (this.textures.has(url)) {
             return this.textures.get(url);
         }
@@ -2771,20 +2913,96 @@ class CRE {
         return result;
     }
     
-    // Multiplayer networking
-    connectToServer(address) {
+    // Real LAN Multiplayer via WebSocket
+    startLANServer() {
+        this.network.isHost = true;
+        this.network.roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        this.connectToGameServer();
+    }
+    
+    connectToLAN(roomCode) {
+        if (!roomCode) {
+            this.addToConsole('Usage: connect <room_code>');
+            return;
+        }
+        
+        this.network.roomId = roomCode.toUpperCase();
+        this.network.isHost = false;
+        this.connectToGameServer();
+    }
+    
+    connectToGameServer() {
+        this.addToConsole('Connecting to game server...');
+        
+        // Get username from crz.games if available
+        this.fetchUsername().then(user => {
+            if (user) {
+                this.network.playerId = user[0];
+                this.network.user = user[1];
+            } else {
+                this.network.playerId = `nonauth_${Math.random().toString(36).substring(2, 10)}`;
+                this.network.user = null;
+            }
+            this.initWebSocketConnection();
+        }).catch(() => {
+            this.network.playerId = Math.random().toString(36).substring(2, 10);
+            this.network.user = null;
+            this.initWebSocketConnection();
+        });
+    }
+    
+    async fetchUsername() {
+        if (!this.crzgames) return null;
+        
         try {
-            this.network.socket = new WebSocket(address);
+            const response = await fetch('https://crz.games:21212/endpoints/getloggedinuser.php', {
+                credentials: 'include'
+            });
+            const data = await response.json();
+            
+            if (data.success && data.authenticated) {
+                return [data.username, data.user];
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+    
+    initWebSocketConnection() {
+        try {
+            this.network.socket = new WebSocket('wss://crz.games:21212/gameserver');
             
             this.network.socket.onopen = () => {
-                this.network.connected = true;
-                this.addToConsole(`Connected to ${address}`);
-                this.sendMessage({ type: 'join', name: 'Player' });
+                try {
+                    this.network.connected = true;
+                    this.addToConsole(`Connected! Room: ${this.network.roomId}`);
+                    
+                    // Join or create room
+                    this.sendMessage({
+                        type: this.network.isHost ? 'create_room' : 'join_room',
+                        roomId: this.network.roomId,
+                        playerId: this.network.playerId
+                    });
+                    
+                    if (this.network.isHost) {
+                        this.addToConsole(`Room created: ${this.network.roomId}`);
+                        this.addToConsole('Share this code with other players');
+                    } else {
+                        this.addToConsole(`Joined room: ${this.network.roomId}`);
+                    }
+                } catch (e) {
+                    console.error('Error in socket.onopen:', e);
+                }
             };
             
             this.network.socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                this.handleNetworkMessage(data);
+                try {
+                    const data = JSON.parse(event.data);
+                    this.handleNetworkMessage(data);
+                } catch (e) {
+                    console.error('Error handling network message:', e);
+                }
             };
             
             this.network.socket.onclose = () => {
@@ -2792,12 +3010,38 @@ class CRE {
                 this.addToConsole('Disconnected from server');
             };
             
-            this.network.socket.onerror = (error) => {
-                this.addToConsole(`Connection error: ${error}`);
+            this.network.socket.onerror = (event) => {
+                console.error('WebSocket error:', event);
+                this.addToConsole('Failed to connect to game server');
             };
         } catch (e) {
-            this.addToConsole(`Failed to connect: ${e.message}`);
+            console.error('Connection error:', e);
+            this.addToConsole(`Connection failed: ${e.message}`);
         }
+    }
+    
+    getGameState() {
+        return {
+            entities: this.entities.filter(e => e.CRE?.networkSync).map(e => ({
+                id: e.networkId, type: e.constructor.name,
+                position: e.CRE.transform?.getPosition(), rotation: e.CRE.transform?.getRotation()
+            }))
+        };
+    }
+    
+    syncGameState(state) {
+        // Sync entities from server
+        state.entities?.forEach(entData => {
+            let ent = this.entities.find(e => e.networkId === entData.id);
+            if (!ent) {
+                ent = this.SpawnEntity(entData.type);
+                if (ent) ent.networkId = entData.id;
+            }
+            if (ent && ent.CRE.transform) {
+                if (entData.position) ent.CRE.transform.setPosition(...Object.values(entData.position));
+                if (entData.rotation) ent.CRE.transform.setRotation(...Object.values(entData.rotation));
+            }
+        });
     }
     
     disconnectFromServer() {
@@ -2811,64 +3055,152 @@ class CRE {
     
     sendMessage(data) {
         if (this.network.connected && this.network.socket) {
+            data.roomId = this.network.roomId;
+            data.playerId = this.network.playerId;
             this.network.socket.send(JSON.stringify(data));
         }
     }
     
     handleNetworkMessage(data) {
         switch (data.type) {
+            case 'room_created':
+                this.addToConsole('Room created successfully');
+                break;
+            case 'room_joined':
+                this.addToConsole('Joined room successfully');
+                break;
+            case 'player_joined':
+                this.addToConsole(`${data.playerId} joined the room`);
+                break;
+            case 'player_left':
+                this.addToConsole(`${data.playerId} left the room`);
+                // Remove the player's entity
+                const entityToRemove = this.entities.find(e => 
+                    e.CRE && e.CRE.multiplayer && 
+                    e.networkId === data.playerId
+                );
+                if (entityToRemove) {
+                    this.UTIL_REMOVE(entityToRemove);
+                }
+                this.network.players.delete(data.playerId);
+                break;
+            case 'entity_update':
+                this.updateNetworkEntity(data);
+                break;
             case 'player_update':
-                this.updateNetworkPlayer(data);
+                this.updateNetworkEntity(data);
                 break;
-            case 'player_join':
-                this.addToConsole(`${data.name} joined`);
+            case 'chat_message':
+                this.addChatMessage(data.displayName || data.playerId, data.message);
                 break;
-            case 'player_leave':
-                this.addToConsole(`${data.name} left`);
-                this.network.players.delete(data.id);
+            case 'game_state':
+                this.syncGameState(data.state);
                 break;
         }
     }
     
-    updateNetworkPlayer(data) {
-        if (!this.network.players.has(data.id)) {
-            // Create network player entity
-            const player = {
-                CRE: {
-                    transform: new Transform(),
-                    color: data.color || '#00ff00',
-                    drawmode: 0,
-                    dodraw: true
-                },
-                id: data.id,
-                name: data.name
-            };
-            this.network.players.set(data.id, player);
-            this.entities.push(player);
+    updateNetworkEntity(data) {
+        // Don't update our own entity
+        if (data.playerId === this.network.playerId) return;
+        
+        // Find or create the network entity
+        let entity = this.entities.find(e => 
+            e.CRE && e.CRE.multiplayer && 
+            e.networkId === data.playerId
+        );
+        
+        if (!entity) {
+            // Create new network entity
+            entity = this.SpawnEntity(data.entityType);
+            if (entity && entity.CRE) {
+                entity.networkId = data.playerId;
+                entity.CRE.multiplayer = true;
+                entity.CRE.isClient = false;
+            }
         }
         
-        const player = this.network.players.get(data.id);
-        if (player && data.position) {
-            player.CRE.transform.setPosition(...data.position);
-        }
-        if (player && data.rotation) {
-            player.CRE.transform.setRotation(...data.rotation);
+        if (entity && entity.CRE) {
+            // Apply networked defaults first (only once when entity is created)
+            if (entity.CRE.networkedDefaults && !entity._defaultsApplied) {
+                Object.keys(entity.CRE.networkedDefaults).forEach(varPath => {
+                    this.setNestedProperty(entity, varPath, entity.CRE.networkedDefaults[varPath]);
+                });
+                entity._defaultsApplied = true;
+            }
+            
+            // Update networked variables
+            if (data.networkedData) {
+                Object.keys(data.networkedData).forEach(varPath => {
+                    this.setNestedProperty(entity, varPath, data.networkedData[varPath]);
+                });
+            }
         }
     }
     
-    broadcastPlayerUpdate() {
+    broadcastEntityUpdate() {
         if (!this.network.connected) return;
         
-        const localPlayer = this.entities.find(e => e.constructor.name === 'Player');
-        if (localPlayer && localPlayer.CRE.transform) {
-            const pos = localPlayer.CRE.transform.getPosition();
-            const rot = localPlayer.CRE.transform.getRotation();
-            
-            this.sendMessage({
-                type: 'player_update',
-                position: [pos.x, pos.y, pos.z],
-                rotation: [rot.x, rot.y, rot.z]
-            });
+        // Find multiplayer entities that belong to this client
+        this.entities.forEach(ent => {
+            if (ent.CRE && ent.CRE.multiplayer && ent.CRE.isClient) {
+                const networkedData = {};
+                if (ent.CRE.networkedVars) {
+                    ent.CRE.networkedVars.forEach(varPath => {
+                        const value = this.getNestedProperty(ent, varPath);
+                        if (value !== undefined) {
+                            networkedData[varPath] = value;
+                        }
+                    });
+                }
+                
+                // Find registered entity type
+                let entityType = ent.constructor.name;
+                if (this.EntityClasses) {
+                    for (const [registeredName, entityData] of Object.entries(this.EntityClasses)) {
+                        if (entityData.cls === ent.constructor) {
+                            entityType = registeredName;
+                            break;
+                        }
+                    }
+                }
+                
+                this.sendMessage({
+                    type: 'entity_update',
+                    entityType: entityType,
+                    networkedData: networkedData,
+                    timestamp: Date.now()
+                });
+            }
+        });
+    }
+    
+    getNestedProperty(obj, path) {
+        return path.split('.').reduce((current, key) => current && current[key], obj);
+    }
+    
+    setNestedProperty(obj, path, value) {
+        const keys = path.split('.');
+        const lastKey = keys.pop();
+        const target = keys.reduce((current, key) => current && current[key], obj);
+        
+        if (target && lastKey) {
+            if (lastKey === 'transform' && value && typeof value === 'object') {
+                // Special handling for transform objects
+                if (target[lastKey] && target[lastKey].setPosition) {
+                    // Update existing transform
+                    if (value.position) target[lastKey].setPosition(value.position.x, value.position.y, value.position.z);
+                    if (value.rotation) target[lastKey].setRotation(value.rotation.x, value.rotation.y, value.rotation.z);
+                    if (value.scale) target[lastKey].setScale(value.scale.x, value.scale.y, value.scale.z);
+                } else {
+                    // Create new transform
+                    target[lastKey] = new Transform();
+                    if (value.position) target[lastKey].setPosition(value.position.x, value.position.y, value.position.z);
+                    if (value.rotation) target[lastKey].setRotation(value.rotation.x, value.rotation.y, value.rotation.z);
+                    if (value.scale) target[lastKey].setScale(value.scale.x, value.scale.y, value.scale.z);
+                }
+            } else {
+                target[lastKey] = value;
+            }
         }
     }
     
