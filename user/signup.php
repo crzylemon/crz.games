@@ -66,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!$error) {
                         $password_hash = password_hash($password, PASSWORD_DEFAULT);
                         $gjp2_hash = hash('sha1', $password . 'mI29fmAnxgTs');
+                        $gjp2_hash = password_hash($gjp2_hash, PASSWORD_DEFAULT);
                         $stmt = $pdo->prepare("INSERT INTO accounts (username, display_name, email, password_hash, gd_password) VALUES (?, ?, ?, ?, ?)");
                         
                         if ($stmt->execute([$username, $display_name, $email ?: '', $password_hash, $gjp2_hash])) {

@@ -25,7 +25,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         if (!$error) {
-        } else {
             if (!empty($new_password)) {
                 if (empty($current_password) || !password_verify($current_password, $user['password_hash'])) {
                     $error = 'Current password is incorrect';
@@ -34,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $password_hash = password_hash($new_password, PASSWORD_DEFAULT);
                     $gjp2_hash = hash('sha1', $new_password . 'mI29fmAnxgTs');
+                    $gjp2_hash = password_hash($gjp2_hash, PASSWORD_DEFAULT);
                     $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, email = ?, password_hash = ?, gd_password = ? WHERE id = ?");
                     $stmt->execute([$display_name, $email ?: '', $password_hash, $gjp2_hash, $user['id']]);
                     $success = 'Settings updated successfully';
