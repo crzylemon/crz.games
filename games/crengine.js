@@ -35,7 +35,7 @@ class CRE {
         this.guiCanvas.style.width = '100%';
         this.guiCanvas.style.height = '100%';
 
-        this.guiCanvas.style.zIndex = '10';
+        this.guiCanvas.style.zIndex = '5';
         this.guiCanvas.style.pointerEvents = 'none';
         this.guiCanvas.style.background = 'transparent';
         this.container.appendChild(this.guiCanvas);
@@ -122,6 +122,11 @@ class CRE {
         this.fov = this.RegisterConVar("fov", "60", FCVAR_NONE, "Camera field of view");
         this.nearplane = this.RegisterConVar("near_plane", "0.01", FCVAR_NONE, "Near clipping plane");
         this.farplane = this.RegisterConVar("far_plane", "1000", FCVAR_NONE, "Far clipping plane");
+        
+        // Host-only convars
+        this.hostname = this.RegisterConVar("hostname", "CRENGINE Server", FCVAR_PROTECTED, "Server hostname");
+        this.maxplayers = this.RegisterConVar("sv_maxplayers", "8", FCVAR_PROTECTED, "Maximum number of players");
+        this.password = this.RegisterConVar("sv_password", "", FCVAR_PROTECTED, "Server password");
         
         // Color correction
         this.brightness = this.RegisterConVar("r_brightness", "1.0", FCVAR_NONE, "Brightness adjustment");
@@ -250,6 +255,27 @@ class CRE {
         this.RegisterConCommand("disconnect", () => {
             this.disconnectFromServer();
         }, FCVAR_NONE, "Disconnect from server");
+        this.RegisterConCommand("players", () => {
+            if (this.network.connected) {
+                this.addToConsole(`Connected players: ${this.network.players.size + 1}`);
+                const hostDisplay = this.network.user?.display || this.network.playerId || 'Self';
+                this.addToConsole(`Host: ${this.network.playerId} (${hostDisplay}) (You)`);
+                for (const playerId of this.network.players.keys()) {
+                    this.addToConsole(`Player: ${playerId}`);
+                }
+            } else {
+                this.addToConsole('Not connected to a server');
+                this.addToConsole('Local player: Self (You)');
+            }
+        }, FCVAR_PROTECTED, "List connected players");
+        this.RegisterConCommand("kick", (playerId) => {
+            if (!playerId) {
+                this.addToConsole('Usage: kick <player_id>');
+                return;
+            }
+            // TODO: Implement kick functionality
+            this.addToConsole(`Kicked player: ${playerId}`);
+        }, FCVAR_PROTECTED, "Kick a player from the server");
         this.RegisterConCommand("script_run", (code) => {
             this.executeScript(code);
         }, FCVAR_CHEAT, "Execute JavaScript code");
@@ -472,7 +498,8 @@ class CRE {
 
         // Start game loop
         this.lastTime = performance.now();
-        requestAnimationFrame(this.gameLoop.bind(this));
+        this.gameLoop = this.gameLoop.bind(this);
+        requestAnimationFrame(this.gameLoop);
     }
     
     initWebGL() {
@@ -597,7 +624,7 @@ class CRE {
                 return;
             }
             // Check if it's a protected command and user is not host
-            if (concommand.hasFlag(FCVAR_PROTECTED) && !this.network.isHost) {
+            if (concommand.hasFlag(FCVAR_PROTECTED) && this.network.connected && !this.network.isHost) {
                 this.addToConsole(`Can't execute ${command}, only server host can use this.`);
                 return;
             }
@@ -615,7 +642,7 @@ class CRE {
                     return;
                 }
                 // Check if it's a protected convar and user is not host
-                if (convar.hasFlag(FCVAR_PROTECTED) && !this.network.isHost) {
+                if (convar.hasFlag(FCVAR_PROTECTED) && this.network.connected && !this.network.isHost) {
                     this.addToConsole(`Can't change ${command}, only server host can use this.`);
                     return;
                 }
@@ -663,6 +690,14 @@ class CRE {
         // Only spawn if run type matches
         if (runType === this.RUN_TYPE || runType === this.Enums.RunType.SHARED) {
             const instance = new cls(...args);
+            
+            // Auto-bind methods to preserve 'this' context
+            Object.getOwnPropertyNames(Object.getPrototypeOf(instance))
+                .filter(name => name !== 'constructor' && typeof instance[name] === 'function')
+                .forEach(methodName => {
+                    instance[methodName] = instance[methodName].bind(instance);
+                });
+            
             if (instance.init && (!instance.CRE || !instance.CRE.multiplayer || instance.CRE.isClient === true)) {
                 instance.init();
             }
@@ -739,7 +774,7 @@ class CRE {
     }
     
     sendChatMessage(message) {
-        const displayName = this.network.user?.display || this.network.playerId;
+        const displayName = this.network.user?.display || this.network.playerId || 'Self';
         
         if (this.network.connected) {
             this.sendMessage({
@@ -2942,7 +2977,7 @@ class CRE {
                 this.network.playerId = user[0];
                 this.network.user = user[1];
             } else {
-                this.network.playerId = `nonauth_${Math.random().toString(36).substring(2, 10)}`;
+                this.network.playerId = `inauth_${Math.random().toString(36).substring(2, 10)}`;
                 this.network.user = null;
             }
             this.initWebSocketConnection();
@@ -3093,7 +3128,7 @@ class CRE {
                 this.updateNetworkEntity(data);
                 break;
             case 'chat_message':
-                this.addChatMessage(data.displayName || data.playerId, data.message);
+                this.addChatMessage(data.displayName || data.playerId || 'Unknown', data.message);
                 break;
             case 'game_state':
                 this.syncGameState(data.state);
