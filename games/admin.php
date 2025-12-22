@@ -4,82 +4,93 @@ require_once '../user/session.php';
 require_once 'includes/admin.php';
 
 $user = getCurrentUser();
-requireAdmin();
+if (!hasAdminRank()) {
+    exit("Access denied. Admin privileges required.");
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $game_id = $_POST['game_id'] ?? 0;
     $action = $_POST['action'] ?? '';
     
-    if ($action === 'approve') {
-        // if it's PENDING_APPROVAL_P, set to PLAYABLE, but if _PU, then set to PUBLIC_UNPLAYABLE
-        if (strpos($game_id, '_PU') !== false) {
-            $stmt = $pdo->prepare("UPDATE games SET status = 'PUBLIC_UNPLAYABLE' WHERE id = ?");
-            $stmt->execute([$game_id]);
-        } else {
-            $stmt = $pdo->prepare("UPDATE games SET status = 'PLAYABLE' WHERE id = ?");
-            $stmt->execute([$game_id]);
-        }
-    } elseif ($action === 'reject') {
-        $stmt = $pdo->prepare("UPDATE games SET status = 'DRAFT' WHERE id = ?");
-        $stmt->execute([$game_id]);
-    } elseif ($action === 'update_banner') {
-        $banner_text = $_POST['banner_text'] ?? '';
-        $banner_type = $_POST['banner_type'] ?? 'info';
-        $banner_enabled = isset($_POST['banner_enabled']) ? 1 : 0;
-        
-        // Create site_settings table if it doesn't exist
-        $pdo->exec("CREATE TABLE IF NOT EXISTS site_settings (
-            id INT PRIMARY KEY AUTO_INCREMENT,
-            setting_key VARCHAR(255) UNIQUE,
-            setting_value TEXT
-        )");
-        
-        $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-        $stmt->execute(['banner_text', $banner_text]);
-        $stmt->execute(['banner_type', $banner_type]);
-        $stmt->execute(['banner_enabled', $banner_enabled]);
-    } elseif ($action === 'add_admin') {
-        $username = $_POST['admin_username'] ?? '';
-        if ($username) {
-            $stmt = $pdo->prepare("SELECT id FROM accounts WHERE username = ?");
-            $stmt->execute([$username]);
-            $userId = $stmt->fetchColumn();
-            if ($userId && addAdmin($userId)) {
-                $success_message = 'Admin added successfully';
+    if ($action === 'approve' || $action === 'reject') {
+        requireGameModerator();
+        if ($action === 'approve') {
+            if (strpos($game_id, '_PU') !== false) {
+                $stmt = $pdo->prepare("UPDATE games SET status = 'PUBLIC_UNPLAYABLE' WHERE id = ?");
+                $stmt->execute([$game_id]);
             } else {
-                $error_message = 'User not found or already admin';
+                $stmt = $pdo->prepare("UPDATE games SET status = 'PLAYABLE' WHERE id = ?");
+                $stmt->execute([$game_id]);
             }
+        } elseif ($action === 'reject') {
+            $stmt = $pdo->prepare("UPDATE games SET status = 'DRAFT' WHERE id = ?");
+            $stmt->execute([$game_id]);
         }
-    } elseif ($action === 'remove_admin') {
-        $userId = $_POST['admin_id'] ?? 0;
-        if ($userId && removeAdmin($userId)) {
-            $success_message = 'Admin removed successfully';
-        } else {
-            $error_message = 'Cannot remove this admin';
-        }
-    } elseif ($action === 'set_hero_game') {
-        $game_id = $_POST['hero_game_id'] ?? '';
-        $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-        $stmt->execute(['hero_game_id', $game_id]);
-        $success_message = 'Hero game updated';
     } elseif ($action === 'toggle_featured') {
+        requireFeaturedAdmin();
         $game_id = $_POST['game_id'] ?? 0;
         $featured = $_POST['featured'] ?? 0;
         $stmt = $pdo->prepare("UPDATE games SET featured = ? WHERE id = ?");
         $stmt->execute([$featured, $game_id]);
         $success_message = $featured ? 'Game added to featured' : 'Game removed from featured';
-    } elseif ($action === 'set_event_banner') {
-        $event_title = $_POST['event_title'] ?? '';
-        $event_description = $_POST['event_description'] ?? '';
-        $event_image = $_POST['event_image'] ?? '';
-        $event_enabled = isset($_POST['event_enabled']) ? 1 : 0;
-        
-        $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-        $stmt->execute(['event_title', $event_title]);
-        $stmt->execute(['event_description', $event_description]);
-        $stmt->execute(['event_image', $event_image]);
-        $stmt->execute(['event_enabled', $event_enabled]);
-        $success_message = 'Event banner updated';
+    } elseif ($action === 'update_banner' || $action === 'set_hero_game' || $action === 'set_event_banner') {
+        requireAdmin();
+        if ($action === 'update_banner') {
+            $banner_text = $_POST['banner_text'] ?? '';
+            $banner_type = $_POST['banner_type'] ?? 'info';
+            $banner_enabled = isset($_POST['banner_enabled']) ? 1 : 0;
+            
+            $pdo->exec("CREATE TABLE IF NOT EXISTS site_settings (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                setting_key VARCHAR(255) UNIQUE,
+                setting_value TEXT
+            )");
+            
+            $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt->execute(['banner_text', $banner_text]);
+            $stmt->execute(['banner_type', $banner_type]);
+            $stmt->execute(['banner_enabled', $banner_enabled]);
+        } elseif ($action === 'set_hero_game') {
+            $game_id = $_POST['hero_game_id'] ?? '';
+            $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt->execute(['hero_game_id', $game_id]);
+            $success_message = 'Hero game updated';
+        } elseif ($action === 'set_event_banner') {
+            $event_title = $_POST['event_title'] ?? '';
+            $event_description = $_POST['event_description'] ?? '';
+            $event_image = $_POST['event_image'] ?? '';
+            $event_enabled = isset($_POST['event_enabled']) ? 1 : 0;
+            
+            $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt->execute(['event_title', $event_title]);
+            $stmt->execute(['event_description', $event_description]);
+            $stmt->execute(['event_image', $event_image]);
+            $stmt->execute(['event_enabled', $event_enabled]);
+            $success_message = 'Event banner updated';
+        }
+    } elseif ($action === 'add_admin_rank') {
+        requireOwner();
+        $username = $_POST['admin_username'] ?? '';
+        $rank = $_POST['admin_rank'] ?? '';
+        if ($username && $rank) {
+            $stmt = $pdo->prepare("SELECT id FROM accounts WHERE username = ?");
+            $stmt->execute([$username]);
+            $userId = $stmt->fetchColumn();
+            if ($userId && addAdminRank($userId, $rank, $user['id'])) {
+                $success_message = 'Admin rank added successfully';
+            } else {
+                $error_message = 'User not found or rank already exists';
+            }
+        }
+    } elseif ($action === 'remove_admin_rank') {
+        requireOwner();
+        $userId = $_POST['admin_id'] ?? 0;
+        $rank = $_POST['admin_rank'] ?? '';
+        if ($userId && $rank && removeAdminRank($userId, $rank)) {
+            $success_message = 'Admin rank removed successfully';
+        } else {
+            $error_message = 'Cannot remove this admin rank';
+        }
     }
     
     header('Location: admin.php');
@@ -117,14 +128,14 @@ try {
         // Column already exists
     }
     
-    // Get admin list with usernames
-    $adminIds = getAdminList();
-    $adminUsers = [];
-    if (!empty($adminIds)) {
-        $placeholders = str_repeat('?,', count($adminIds) - 1) . '?';
-        $stmt = $pdo->prepare("SELECT id, username, display_name FROM accounts WHERE id IN ($placeholders)");
-        $stmt->execute($adminIds);
-        $adminUsers = $stmt->fetchAll();
+    // Get admin list with usernames and ranks
+    $adminUsers = getAllAdmins();
+    
+    // Group admins by user
+    $groupedAdmins = [];
+    foreach ($adminUsers as $admin) {
+        $groupedAdmins[$admin['user_id']]['user'] = $admin;
+        $groupedAdmins[$admin['user_id']]['ranks'][] = $admin['rank'];
     }
 } catch (PDOException $e) {
     die("Error: " . $e->getMessage());
@@ -314,36 +325,59 @@ try {
 
         <div class="banner-section">
             <h2>Admin Management</h2>
+            <?php if (isOwner()): ?>
             <div style="display: flex; gap: 30px;">
                 <div style="flex: 1;">
                     <h3>Current Admins</h3>
-                    <?php foreach ($adminUsers as $admin): ?>
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #16202d; margin-bottom: 5px; border-radius: 4px;">
-                            <span><?= htmlspecialchars($admin['display_name'] ?: $admin['username']) ?> (<?= htmlspecialchars($admin['username']) ?>)</span>
-                            <?php if ($admin['id'] != 1): ?>
-                                <form method="POST" style="display: inline;">
-                                    <input type="hidden" name="admin_id" value="<?= $admin['id'] ?>">
-                                    <button type="submit" name="action" value="remove_admin" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;" onclick="return confirm('Remove admin access?')">Remove</button>
-                                </form>
-                            <?php else: ?>
-                                <span style="color: #888; font-size: 12px;">Owner</span>
-                            <?php endif; ?>
+                    <?php foreach ($groupedAdmins as $userId => $adminData): ?>
+                        <div style="padding: 15px; background: #16202d; margin-bottom: 10px; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span style="font-weight: bold; color: #66c0f4;"><?= htmlspecialchars($adminData['user']['display_name'] ?: $adminData['user']['username']) ?> (<?= htmlspecialchars($adminData['user']['username']) ?>)</span>
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                                <?php foreach ($adminData['ranks'] as $rank): ?>
+                                    <div style="display: flex; align-items: center; background: #2a5298; color: white; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                                        <span><?= ucfirst(str_replace('_', ' ', $rank)) ?></span>
+                                        <?php if ($userId != 1 || $rank !== 'owner'): ?>
+                                            <form method="POST" style="display: inline; margin-left: 5px;">
+                                                <input type="hidden" name="admin_id" value="<?= $userId ?>">
+                                                <input type="hidden" name="admin_rank" value="<?= $rank ?>">
+                                                <button type="submit" name="action" value="remove_admin_rank" style="background: #f44336; color: white; border: none; padding: 2px 4px; border-radius: 2px; cursor: pointer; font-size: 10px;" onclick="return confirm('Remove <?= $rank ?> rank?')">×</button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
                 <div style="flex: 1;">
-                    <h3>Add Admin</h3>
+                    <h3>Add Admin Rank</h3>
                     <form method="POST">
                         <div class="form-group">
                             <label class="form-label" for="admin_username">Username</label>
                             <input type="text" id="admin_username" name="admin_username" class="form-input" placeholder="Enter username" required>
                         </div>
-                        <button type="submit" name="action" value="add_admin" class="update-btn">Add Admin</button>
+                        <div class="form-group">
+                            <label class="form-label" for="admin_rank">Rank</label>
+                            <select id="admin_rank" name="admin_rank" class="form-select" required>
+                                <option value="">Select rank...</option>
+                                <option value="game_moderator">Game Moderator (Approve/reject games)</option>
+                                <option value="featured_admin">Featured Admin (Manage featured games)</option>
+                                <option value="admin">Admin (Site settings, banners)</option>
+                                <option value="owner">Owner (Full access)</option>
+                            </select>
+                        </div>
+                        <button type="submit" name="action" value="add_admin_rank" class="update-btn">Add Rank</button>
                     </form>
                 </div>
             </div>
+            <?php else: ?>
+                <p style="color: #8f98a0;">Only owners can manage admin ranks.</p>
+            <?php endif; ?>
         </div>
 
+        <?php if (canManageFeatured()): ?>
         <div class="banner-section">
             <h2>Featured Content Management</h2>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
@@ -428,7 +462,9 @@ try {
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
+        <?php if (isAdmin()): ?>
         <div class="banner-section">
             <h2>Site Banner</h2>
             <form method="POST">
@@ -454,7 +490,9 @@ try {
                 <button type="submit" name="action" value="update_banner" class="update-btn">Update Banner</button>
             </form>
         </div>
+        <?php endif; ?>
 
+        <?php if (canModerateGames()): ?>
         <h2>Pending Game Approvals (<?= count($pending_games) ?>)</h2>
         
         <?php if (empty($pending_games)): ?>
@@ -493,6 +531,7 @@ try {
                     </div>
                 <?php endforeach; ?>
             </div>
+        <?php endif; ?>
         <?php endif; ?>
     </div>
     

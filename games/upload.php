@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $genre = $_POST['genre'] ?? '';
     $hosting_type = $_POST['hosting_type'] ?? 'ZIP';
     $game_url = $_POST['game_url'] ?? '';
-    $uses_crengine = isset($_POST['uses_crengine']) ? 1 : 0;
+    $uses_crengine = ($_POST['game_engine'] ?? '') === 'CRENGINE' ? 1 : 0;
     $is_crengine_mod = isset($_POST['is_crengine_mod']) ? 1 : 0;
     $status = $_POST['status'] ?? 'DRAFT';
     
@@ -271,7 +271,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="form-group">
                     <label class="form-label">Game Engine</label>
                     <!-- Dropdown for game engines -->
-                    <select name="game_engine" class="form-select">
+                    <select name="game_engine" class="form-select" id="game_engine">
                         <option value="CRENGINE">CRENGINE</option>
                         <option value="Unity">Unity</option>
                         <option value="Unreal">Unreal Engine</option>
@@ -285,7 +285,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <option value="Scratch Mod">Scratch Mod (Turbowarp, Penguinmod, Gandi IDE, etc.)</option>
                         <option value="Other">Other</option>
                     </select>
-                    <label><input type="checkbox" name="uses_crengine" id="crengine"> Uses CRENGINE</label>
                     <div id="crengine-mod" style="display:none;">
                         <label><input type="checkbox" name="is_crengine_mod"> Is this game a CRENGINE mod</label>
                     </div>
@@ -351,8 +350,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
 
             <script>
-                document.getElementById('crengine').addEventListener('change', function() {
-                    document.getElementById('crengine-mod').style.display = this.checked ? 'block' : 'none';
+                document.getElementById('game_engine').addEventListener('change', function() {
+                    document.getElementById('crengine-mod').style.display = this.value === 'CRENGINE' ? 'block' : 'none';
                 });
                 
                 document.querySelectorAll('input[name="hosting_type"]').forEach(radio => {

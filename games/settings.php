@@ -13,24 +13,29 @@ $message = '';
 if ($_POST) {
     $blocked_engines = $_POST['blocked_engines'] ?? [];
     $blocked_engines_str = implode(',', $blocked_engines);
+    $can_games_read_email = isset($_POST['can_games_read_email']) ? 1 : 0;
     
     try {
-        $stmt = $pdo->prepare("UPDATE accounts SET blocked_engines = ? WHERE id = ?");
-        $stmt->execute([$blocked_engines_str, $current_user['id']]);
+        $stmt = $pdo->prepare("UPDATE accounts SET blocked_engines = ?, games_read_email = ? WHERE id = ?");
+        $stmt->execute([$blocked_engines_str, $can_games_read_email, $current_user['id']]);
         $message = 'Settings saved successfully';
     } catch (PDOException $e) {
         $message = 'Error saving settings';
     }
 }
 
-// Get current blocked engines
+// Get current settings
 $blocked_engines = [];
+$games_read_email = false;
 try {
-    $stmt = $pdo->prepare("SELECT blocked_engines FROM accounts WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT blocked_engines, games_read_email FROM accounts WHERE id = ?");
     $stmt->execute([$current_user['id']]);
-    $result = $stmt->fetchColumn();
+    $result = $stmt->fetch();
     if ($result) {
-        $blocked_engines = explode(',', $result);
+        if ($result['blocked_engines']) {
+            $blocked_engines = explode(',', $result['blocked_engines']);
+        }
+        $games_read_email = (bool)$result['games_read_email'];
     }
 } catch (PDOException $e) {}
 
@@ -106,6 +111,17 @@ $engines = ['CRENGINE', 'Unity', 'Unreal', 'Godot', 'GameMaker20', 'GameMaker', 
             <?php endif; ?>
 
             <form method="POST">
+                <div class="form-group">
+                    <label class="form-label">Main Settings</label>
+                    <p style="color: #888; font-size: 0.9rem; margin-bottom: 15px;">
+                        These settings are for general use.
+                    </p>
+                    <div class="checkbox-item">
+                        <input type="checkbox" name="can_games_read_email" value="1" id="can_games_read_email" <?= $games_read_email ? 'checked' : '' ?>>
+                        <label for="can_games_read_email">Allow games to read email?</label>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label class="form-label">Block Game Engines</label>
                     <p style="color: #888; font-size: 0.9rem; margin-bottom: 15px;">

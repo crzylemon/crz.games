@@ -47,7 +47,7 @@ try {
         'success' => true,
         'games' => $games,
         'rooms' => $rooms,
-        'websocket_url' => 'ws://localhost:7777'
+        'websocket_url' => 'wss://crz.games:21212/gameserver'
     ]);
 
 } catch (PDOException $e) {

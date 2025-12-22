@@ -2,7 +2,7 @@
 // Centralized admin management system
 require_once dirname(__DIR__) . '/../user/session.php';
 
-function isAdmin($userId = null) {
+function hasAdminRank($userId = null, $requiredRank = null) {
     if ($userId === null) {
         $user = getCurrentUser();
         $userId = $user['id'] ?? null;
@@ -12,115 +12,156 @@ function isAdmin($userId = null) {
         return false;
     }
     
-    // Fallback: user ID 1 is always admin
-    if ((int)$userId === 1) {
-        return true;
-    }
-    
-    // Get admin list from database
     global $pdo;
     if (!$pdo) {
         return false;
     }
     
     try {
-        $stmt = $pdo->prepare("SELECT setting_value FROM site_settings WHERE setting_key = 'admin_users'");
-        $stmt->execute();
-        $adminList = $stmt->fetchColumn();
+        $stmt = $pdo->prepare("SELECT rank FROM admin_ranks WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        $ranks = $stmt->fetchAll(PDO::FETCH_COLUMN);
         
-        if ($adminList) {
-            $adminIds = array_map('intval', explode(',', $adminList));
-            return in_array((int)$userId, $adminIds);
+        if (empty($ranks)) {
+            return false;
         }
+        
+        if ($requiredRank === null) {
+            return !empty($ranks);
+        }
+        
+        $rankHierarchy = ['game_moderator' => 1, 'featured_admin' => 2, 'admin' => 3, 'owner' => 4];
+        $userMaxRank = max(array_map(fn($r) => $rankHierarchy[$r] ?? 0, $ranks));
+        $requiredLevel = $rankHierarchy[$requiredRank] ?? 0;
+        
+        return $userMaxRank >= $requiredLevel;
     } catch (PDOException $e) {
-        // Fallback if database fails
+        return false;
     }
-    
-    return false;
+}
+
+function isAdmin($userId = null) {
+    return hasAdminRank($userId, 'admin');
+}
+
+function canModerateGames($userId = null) {
+    return hasAdminRank($userId, 'game_moderator');
+}
+
+function canManageFeatured($userId = null) {
+    return hasAdminRank($userId, 'featured_admin');
+}
+
+function isOwner($userId = null) {
+    return hasAdminRank($userId, 'owner');
 }
 
 function requireAdmin() {
     if (!isAdmin()) {
-        exit("Access denied. Please log in as an admin.");
+        exit("Access denied. Admin privileges required.");
+    }
+}
+
+function requireGameModerator() {
+    if (!canModerateGames()) {
+        exit("Access denied. Game moderation privileges required.");
+    }
+}
+
+function requireFeaturedAdmin() {
+    if (!canManageFeatured()) {
+        exit("Access denied. Featured management privileges required.");
+    }
+}
+
+function requireOwner() {
+    if (!isOwner()) {
+        exit("Access denied. Owner privileges required.");
     }
 }
 
 function getAdminList() {
     global $pdo;
     if (!$pdo) {
-        return [1];
+        return [];
     }
     
     try {
-        $stmt = $pdo->prepare("SELECT setting_value FROM site_settings WHERE setting_key = 'admin_users'");
+        $stmt = $pdo->prepare("SELECT DISTINCT user_id FROM admin_ranks");
         $stmt->execute();
-        $adminList = $stmt->fetchColumn();
-        
-        if ($adminList) {
-            $adminIds = array_map('intval', explode(',', $adminList));
-            // Always ensure user ID 1 is in the list
-            if (!in_array(1, $adminIds)) {
-                $adminIds[] = 1;
-            }
-            return $adminIds;
-        }
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
     } catch (PDOException $e) {
-        // Return default if database fails
+        return [];
     }
-    
-    return [1]; // Default: user ID 1 is admin
 }
 
-function addAdmin($userId) {
+function getUserRanks($userId) {
+    global $pdo;
+    if (!$pdo) {
+        return [];
+    }
+    
+    try {
+        $stmt = $pdo->prepare("SELECT rank FROM admin_ranks WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (PDOException $e) {
+        return [];
+    }
+}
+
+function addAdminRank($userId, $rank, $grantedBy) {
     global $pdo;
     if (!$pdo) {
         return false;
     }
     
-    $adminIds = getAdminList();
-    
-    if (!in_array((int)$userId, $adminIds)) {
-        $adminIds[] = (int)$userId;
-        $adminList = implode(',', $adminIds);
-        
-        try {
-            $stmt = $pdo->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES ('admin_users', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-            $stmt->execute([$adminList]);
-            return true;
-        } catch (PDOException $e) {
-            return false;
-        }
+    $validRanks = ['game_moderator', 'featured_admin', 'admin', 'owner'];
+    if (!in_array($rank, $validRanks)) {
+        return false;
     }
     
-    return false;
+    try {
+        $stmt = $pdo->prepare("INSERT IGNORE INTO admin_ranks (user_id, rank, granted_by) VALUES (?, ?, ?)");
+        $stmt->execute([$userId, $rank, $grantedBy]);
+        return $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        return false;
+    }
 }
 
-function removeAdmin($userId) {
+function removeAdminRank($userId, $rank) {
     global $pdo;
     if (!$pdo) {
         return false;
     }
     
-    // Don't allow removing user ID 1
-    if ((int)$userId === 1) {
+    // Don't allow removing owner rank from user ID 1
+    if ((int)$userId === 1 && $rank === 'owner') {
         return false;
     }
     
-    $adminIds = getAdminList();
-    $key = array_search((int)$userId, $adminIds);
-    if ($key !== false) {
-        unset($adminIds[$key]);
-        $adminList = implode(',', array_values($adminIds));
-        
-        try {
-            $stmt = $pdo->prepare("UPDATE site_settings SET setting_value = ? WHERE setting_key = 'admin_users'");
-            $stmt->execute([$adminList]);
-            return true;
-        } catch (PDOException $e) {
-            return false;
-        }
+    try {
+        $stmt = $pdo->prepare("DELETE FROM admin_ranks WHERE user_id = ? AND rank = ?");
+        $stmt->execute([$userId, $rank]);
+        return $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
+function getAllAdmins() {
+    global $pdo;
+    if (!$pdo) {
+        return [];
     }
     
-    return false;
+    try {
+        $stmt = $pdo->prepare("SELECT ar.user_id, ar.rank, a.username, a.display_name FROM admin_ranks ar JOIN accounts a ON ar.user_id = a.id ORDER BY ar.user_id, FIELD(ar.rank, 'owner', 'admin', 'featured_admin', 'game_moderator')");
+        $stmt->execute();
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        return [];
+    }
 }
 ?>
