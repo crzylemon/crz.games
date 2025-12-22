@@ -33,8 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $error = 'New password must be at least 6 characters';
                 } else {
                     $password_hash = password_hash($new_password, PASSWORD_DEFAULT);
-                    $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, email = ?, password_hash = ? WHERE id = ?");
-                    $stmt->execute([$display_name, $email ?: '', $password_hash, $user['id']]);
+                    $gjp2_hash = hash('sha1', $new_password . 'mI29fmAnxgTs');
+                    $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, email = ?, password_hash = ?, gd_password = ? WHERE id = ?");
+                    $stmt->execute([$display_name, $email ?: '', $password_hash, $gjp2_hash, $user['id']]);
                     $success = 'Settings updated successfully';
                 }
             } else {
