@@ -26,7 +26,7 @@ try {
     $roomId = uniqid('room_', true);
     
     $stmt = $pdo->prepare("
-        INSERT INTO game_rooms (room_id, game_id, host_user_id, room_name, max_players, player_count, status, created_at)
+        INSERT INTO game_rooms (room_id, game_id, host_user_id, hostname, max_players, player_count, status, created_at)
         VALUES (?, ?, ?, ?, ?, 0, 'active', NOW())
     ");
     $stmt->execute([$roomId, $gameId, $user['id'], $roomName, $maxPlayers]);
@@ -34,7 +34,7 @@ try {
     echo json_encode([
         'success' => true,
         'room_id' => $roomId,
-        'websocket_url' => 'ws://localhost:7777'
+        'websocket_url' => 'wss://crz.games:21212/gameserver'
     ]);
 
 } catch (PDOException $e) {

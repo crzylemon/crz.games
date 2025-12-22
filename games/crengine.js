@@ -785,11 +785,11 @@ class CRE {
         }
         
         // Always show locally for sender
-        this.addChatMessage(displayName, message);
+        this.addChatMessage(`${displayName} : ${message}`);
     }
     
-    addChatMessage(playerId, message) {
-        this.chat.messages.push({ playerId, message });
+    addChatMessage(message) {
+        this.chat.messages.push({ message });
         
         // Keep only last maxMessages
         if (this.chat.messages.length > this.chat.maxMessages) {
@@ -804,7 +804,7 @@ class CRE {
         if (chatElement) {
             const displayMessages = this.chat.messages.slice(-5); // Show last 5 messages
             chatElement.text = displayMessages.map(msg => 
-                `${msg.playerId}: ${msg.message}`
+                msg.message
             ).join('\n');
         }
     }
@@ -3015,11 +3015,20 @@ class CRE {
                     this.network.connected = true;
                     this.addToConsole(`Connected! Room: ${this.network.roomId}`);
                     
+                    // Get gameId from URL parameter
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const gameIdParam = urlParams.get('gameId');
+                    const gameId = !isNaN(parseInt(gameIdParam)) ? parseInt(gameIdParam) : null;
+                    
                     // Join or create room
                     this.sendMessage({
                         type: this.network.isHost ? 'create_room' : 'join_room',
                         roomId: this.network.roomId,
-                        playerId: this.network.playerId
+                        playerId: this.network.playerId,
+                        hostname: this.GetConVar('hostname'),
+                        maxPlayers: parseInt(this.GetConVar('sv_maxplayers')),
+                        gameId: gameId,
+                        hostUserId: this.network.user?.id || null
                     });
                     
                     if (this.network.isHost) {
@@ -3107,9 +3116,11 @@ class CRE {
                 this.addToConsole('Joined room successfully');
                 break;
             case 'player_joined':
+                this.addChatMessage(`${data.playerId} joined.`)
                 this.addToConsole(`${data.playerId} joined the room`);
                 break;
             case 'player_left':
+                this.addChatMessage(`${data.playerId} disconnected.`)
                 this.addToConsole(`${data.playerId} left the room`);
                 // Remove the player's entity
                 const entityToRemove = this.entities.find(e => 
@@ -3128,7 +3139,7 @@ class CRE {
                 this.updateNetworkEntity(data);
                 break;
             case 'chat_message':
-                this.addChatMessage(data.displayName || data.playerId || 'Unknown', data.message);
+                this.addChatMessage(`${data.displayName || data.playerId || 'Unknown'} : ${data.message}`);
                 break;
             case 'game_state':
                 this.syncGameState(data.state);
