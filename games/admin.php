@@ -356,7 +356,8 @@ try {
                     <form method="POST">
                         <div class="form-group">
                             <label class="form-label" for="admin_username">Username</label>
-                            <input type="text" id="admin_username" name="admin_username" class="form-input" placeholder="Enter username" required>
+                            <input type="text" id="admin_username" name="admin_username" class="form-input" placeholder="Search username..." onkeyup="searchUsers()" autocomplete="off" required>
+                            <div id="user-results" class="search-results"></div>
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="admin_rank">Rank</label>
@@ -596,6 +597,40 @@ try {
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: `action=toggle_featured&game_id=${gameId}&featured=0`
         }).then(() => location.reload());
+    }
+    
+    function searchUsers() {
+        const query = document.getElementById('admin_username').value;
+        const results = document.getElementById('user-results');
+        
+        if (query.length < 2) {
+            results.style.display = 'none';
+            return;
+        }
+        
+        fetch('search_users.php?q=' + encodeURIComponent(query))
+            .then(response => response.json())
+            .then(users => {
+                results.innerHTML = '';
+                users.forEach(user => {
+                    const div = document.createElement('div');
+                    div.className = 'search-result';
+                    div.innerHTML = `
+                        <div>
+                            <div class="game-name">${user.display_name || user.username}</div>
+                            <div class="game-author">@${user.username}</div>
+                        </div>
+                    `;
+                    div.onclick = () => selectUser(user);
+                    results.appendChild(div);
+                });
+                results.style.display = users.length ? 'block' : 'none';
+            });
+    }
+    
+    function selectUser(user) {
+        document.getElementById('admin_username').value = user.username;
+        document.getElementById('user-results').style.display = 'none';
     }
     </script>
 </body>
