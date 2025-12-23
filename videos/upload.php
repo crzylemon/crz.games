@@ -2,6 +2,15 @@
 require_once '../db.php';
 require_once '../user/session.php';
 
+function generateVideoId() {
+    $chars = '1234567890-_abcdefghjiklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $id = '';
+    for ($i = 0; $i < 16; $i++) {
+        $id .= $chars[random_int(0, strlen($chars) - 1)];
+    }
+    return $id;
+}
+
 $user = getCurrentUser();
 if (!$user) {
     header('Location: ../user/login.php');
@@ -28,21 +37,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!is_dir($video_dir)) mkdir($video_dir, 0755, true);
             if (!is_dir($thumb_dir)) mkdir($thumb_dir, 0755, true);
             
+            // Generate unique video ID
+            do {
+                $video_id = generateVideoId();
+                $stmt = $pdo_videos->prepare("SELECT id FROM videos WHERE id = ?");
+                $stmt->execute([$video_id]);
+            } while ($stmt->fetch());
+            
             // Insert video record
-            $stmt = $pdo_videos->prepare("INSERT INTO videos (title, description, video_path, owner_user_id, status) VALUES (?, ?, ?, ?, ?)");
-            $stmt->execute([$title, $description, '', $user['id'], $status]);
-            $video_id = $pdo_videos->lastInsertId();
+            $stmt = $pdo_videos->prepare("INSERT INTO videos (id, title, description, video_path, owner_user_id, status) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$video_id, $title, $description, '', $user['id'], $status]);
             
             // Handle video upload
             $video_ext = pathinfo($_FILES['video_file']['name'], PATHINFO_EXTENSION);
-            $video_path = $video_dir . $video_id . '_video.' . $video_ext;
+            $video_filename = $video_id . '_video.' . $video_ext;
+            $video_path = $video_dir . $video_filename;
             move_uploaded_file($_FILES['video_file']['tmp_name'], $video_path);
             
             // Handle thumbnail upload
             $thumb_path = '';
             if (isset($_FILES['thumbnail']) && $_FILES['thumbnail']['error'] === UPLOAD_ERR_OK) {
                 $thumb_ext = pathinfo($_FILES['thumbnail']['name'], PATHINFO_EXTENSION);
-                $thumb_path = $thumb_dir . $video_id . '_thumb.' . $thumb_ext;
+                $thumb_filename = $video_id . '_thumb.' . $thumb_ext;
+                $thumb_path = $thumb_dir . $thumb_filename;
                 move_uploaded_file($_FILES['thumbnail']['tmp_name'], $thumb_path);
             }
             
@@ -116,8 +133,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
-    <?php include '../games/includes/banner.php'; ?>
-    <?php include '../games/includes/account_nav.php'; ?>
+    <?php include 'includes/banner.php'; ?>
+    <?php include 'includes/account_nav.php'; ?>
     
     <div class="container" style="margin-top: 80px;">
         <div class="game-header">
