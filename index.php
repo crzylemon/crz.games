@@ -2,6 +2,11 @@
 require_once 'db.php';
 require_once 'user/session.php';
 $user = getCurrentUser();
+// show errors
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+
 ?>
 <!DOCTYPE html>
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -78,12 +83,31 @@ $user = getCurrentUser();
                 <div class="hover-text">Click to replay</div>
             </div>
             <p>The ultimate destination for gaming, videos, and community content</p>
-            <a href="/vid/" class="cta thingbutton">Start Watching</a>
+            <a href="/games/" class="cta thingbutton">Start Playing</a>
+            <a href="/videos/" class="cta thingbutton">Start Watching</a>
         </section>
-
         <?php
-        require_once 'api.php';
-        $stats = api('stats');
+        // get the stats
+        // without api
+        // with sql
+        $stats = [];
+        // videos
+        $stmt = $pdo_videos->prepare("SELECT COUNT(*) as count FROM videos");
+        $stmt->execute();
+        $stats['videos'] = $stmt->fetchColumn();
+        // users
+        $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM accounts");
+        $stmt->execute();
+        $stats['users'] = $stmt->fetchColumn();
+        // games
+        $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM games");
+        $stmt->execute();
+        $stats['games'] = $stmt->fetchColumn();
+        // community support i guess, just average all the user's (lse - lss) (last session end - last session start)
+        $stmt = $pdo->prepare("SELECT AVG(TIMESTAMPDIFF(SECOND, lss, lse)) as avg FROM accounts WHERE lss IS NOT NULL AND lse IS NOT NULL AND lse > lss");
+        $stmt->execute();
+        $avg_seconds = $stmt->fetchColumn();
+        $stats['community_support'] = $avg_seconds ? round($avg_seconds / 60, 1) . 'm' : '0m';
         ?>
         <section class="stats">
             <div class="stat-card thing">
@@ -99,13 +123,15 @@ $user = getCurrentUser();
                 <div class="label">Games Available</div>
             </div>
             <div class="stat-card thing">
-                <div class="number">24/7</div>
-                <div class="label">Community Support</div>
+                <div class="number"><?php echo $stats['community_support'];?></div>
+                <div class="label">Average session time</div>
             </div>
         </section>
 
         <?php
-        $reviews = api('reviews');
+        $stmt = $pdo->prepare("SELECT * FROM reviews ORDER BY created_at DESC LIMIT 3");
+        $stmt->execute();
+        $reviews = $stmt->fetchAll(PDO::FETCH_ASSOC);
         ?>
         <section style="margin: 40px 0; padding: 30px;" class="thing">
             <h2 style="text-align: center; margin-bottom: 30px;">What Our Users Think of Us</h2>
@@ -150,7 +176,7 @@ $user = getCurrentUser();
                 <div class="content">
                     <h3>CRZ.Videos</h3>
                     <p>Upload, share, and discover amazing videos. Create playlists, add captions, and engage with our growing community.</p>
-                    <a href="/vid/" class="btn thingbutton" disabled>Watch Videos</a>
+                    <a href="/videos/" class="btn thingbutton">Watch Videos</a>
                 </div>
             </div>
         </section>
