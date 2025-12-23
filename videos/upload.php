@@ -29,9 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!is_dir($thumb_dir)) mkdir($thumb_dir, 0755, true);
             
             // Insert video record
-            $stmt = $pdo->prepare("INSERT INTO videos (title, description, video_path, owner_user_id, status) VALUES (?, ?, ?, ?, ?)");
+            $stmt = $pdo_videos->prepare("INSERT INTO videos (title, description, video_path, owner_user_id, status) VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([$title, $description, '', $user['id'], $status]);
-            $video_id = $pdo->lastInsertId();
+            $video_id = $pdo_videos->lastInsertId();
             
             // Handle video upload
             $video_ext = pathinfo($_FILES['video_file']['name'], PATHINFO_EXTENSION);
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             // Update video with file paths
-            $stmt = $pdo->prepare("UPDATE videos SET video_path = ?, thumbnail_path = ? WHERE id = ?");
+            $stmt = $pdo_videos->prepare("UPDATE videos SET video_path = ?, thumbnail_path = ? WHERE id = ?");
             $stmt->execute([$video_path, $thumb_path, $video_id]);
             
             header('Location: watch.php?id=' . $video_id);

@@ -6,7 +6,7 @@ $user = getCurrentUser();
 $video_id = $_GET['id'] ?? 0;
 
 try {
-    $stmt = $pdo->prepare("SELECT v.*, a.username, a.display_name FROM videos v JOIN accounts a ON v.owner_user_id = a.id WHERE v.id = ? AND (v.status = 'PUBLIC' OR v.owner_user_id = ?)");
+    $stmt = $pdo_videos->prepare("SELECT v.*, a.username, a.display_name FROM videos v JOIN accounts a ON v.owner_user_id = a.id WHERE v.id = ? AND (v.status = 'PUBLIC' OR v.owner_user_id = ?)");
     $stmt->execute([$video_id, $user['id'] ?? 0]);
     $video = $stmt->fetch();
     
@@ -17,7 +17,7 @@ try {
     }
     
     // Increment view count
-    $stmt = $pdo->prepare("UPDATE videos SET views = views + 1 WHERE id = ?");
+    $stmt = $pdo_videos->prepare("UPDATE videos SET views = views + 1 WHERE id = ?");
     $stmt->execute([$video_id]);
 } catch (PDOException $e) {
     die("Error: " . $e->getMessage());

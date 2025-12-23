@@ -6,7 +6,7 @@ $user = getCurrentUser();
 
 try {
     // Create videos table if it doesn't exist
-    $pdo->exec("CREATE TABLE IF NOT EXISTS videos (
+    $pdo_videos->exec("CREATE TABLE IF NOT EXISTS videos (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         description TEXT,
@@ -19,9 +19,18 @@ try {
     )");
     
     // Get recent videos
-    $stmt = $pdo->prepare("SELECT v.*, a.username, a.display_name FROM videos v JOIN accounts a ON v.owner_user_id = a.id WHERE v.status = 'PUBLIC' ORDER BY v.created_at DESC LIMIT 12");
+    $stmt = $pdo_videos->prepare("SELECT * FROM videos WHERE status = 'PUBLIC' ORDER BY created_at DESC LIMIT 12");
     $stmt->execute();
     $videos = $stmt->fetchAll();
+    
+    // Get user info for each video
+    foreach ($videos as &$video) {
+        $stmt = $pdo->prepare("SELECT username, display_name FROM accounts WHERE id = ?");
+        $stmt->execute([$video['owner_user_id']]);
+        $user_info = $stmt->fetch();
+        $video['username'] = $user_info['username'] ?? 'Unknown';
+        $video['display_name'] = $user_info['display_name'] ?? 'Unknown';
+    }
 } catch (PDOException $e) {
     die("Error: " . $e->getMessage());
 }
@@ -90,7 +99,7 @@ try {
 </head>
 <body>
     <?php include '../games/includes/banner.php'; ?>
-    <?php include '../games/includes/account_nav.php'; ?>
+    <?php include 'includes/account_nav.php'; ?>
     
     <div class="container" style="margin-top: 80px;">
         <div class="game-header">
