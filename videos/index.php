@@ -23,13 +23,13 @@ try {
     $stmt->execute();
     $videos = $stmt->fetchAll();
     
-    // Get user info for each video
-    foreach ($videos as &$video) {
+    // Get user info for each video from main database
+    for ($i = 0; $i < count($videos); $i++) {
         $stmt = $pdo->prepare("SELECT username, display_name FROM accounts WHERE id = ?");
-        $stmt->execute([$video['owner_user_id']]);
+        $stmt->execute([$videos[$i]['owner_user_id']]);
         $user_info = $stmt->fetch();
-        $video['username'] = $user_info['username'] ?? 'Unknown';
-        $video['display_name'] = $user_info['display_name'] ?? 'Unknown';
+        $videos[$i]['username'] = $user_info['username'] ?? 'Unknown';
+        $videos[$i]['display_name'] = $user_info['display_name'] ?? 'Unknown';
     }
 } catch (PDOException $e) {
     die("Error: " . $e->getMessage());
@@ -98,7 +98,7 @@ try {
     </style>
 </head>
 <body>
-    <?php include '../games/includes/banner.php'; ?>
+    <?php include 'includes/banner.php'; ?>
     <?php include 'includes/account_nav.php'; ?>
     
     <div class="container" style="margin-top: 80px;">
@@ -110,8 +110,10 @@ try {
         <div class="videos-grid">
             <?php foreach ($videos as $video): ?>
                 <div class="video-card" onclick="location.href='watch.php?id=<?= $video['id'] ?>'">
-                    <?php if ($video['thumbnail_path']): ?>
+                    <?php if ($video['thumbnail_path'] && file_exists($video['thumbnail_path'])): ?>
                         <img src="<?= htmlspecialchars($video['thumbnail_path']) ?>" alt="<?= htmlspecialchars($video['title']) ?>" class="video-thumbnail">
+                    <?php else: ?>
+                        <div class="video-thumbnail" style="background: linear-gradient(135deg, #1e2329 0%, #2a3441 100%); display: flex; align-items: center; justify-content: center; color: #8f98a0; font-size: 3rem;">▶</div>
                     <?php endif; ?>
                     <div class="video-info">
                         <div class="video-title"><?= htmlspecialchars($video['title']) ?></div>

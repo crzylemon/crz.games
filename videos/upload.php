@@ -88,6 +88,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
+            // Handle captions upload
+            if (isset($_FILES['captions']) && $_FILES['captions']['error'] === UPLOAD_ERR_OK) {
+                $captions_dir = "uploads/captions/";
+                if (!is_dir($captions_dir)) mkdir($captions_dir, 0755, true);
+                
+                $captions_ext = pathinfo($_FILES['captions']['name'], PATHINFO_EXTENSION);
+                $captions_filename = $video_id . '_captions.' . $captions_ext;
+                $captions_path = $captions_dir . $captions_filename;
+                move_uploaded_file($_FILES['captions']['tmp_name'], $captions_path);
+                
+                $stmt = $pdo_videos->prepare("INSERT INTO captions (video_id, file_path) VALUES (?, ?)");
+                $stmt->execute([$video_id, $captions_path]);
+            }
+            
             header('Location: watch.php?id=' . $video_id);
             exit;
         } catch (Exception $e) {
@@ -195,6 +209,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="form-group">
                     <label class="form-label" for="tags">Tags (comma-separated)</label>
                     <input type="text" id="tags" name="tags" class="form-input" placeholder="gaming, funny, tutorial">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="captions">Captions File (optional .srt/.vtt)</label>
+                    <input type="file" id="captions" name="captions" class="form-input" accept=".srt,.vtt">
                 </div>
 
                 <div class="form-group">

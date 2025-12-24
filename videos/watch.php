@@ -46,6 +46,16 @@ try {
     $stmt->execute([$video_id]);
     $tags = $stmt->fetchAll(PDO::FETCH_COLUMN);
     
+    // Get captions
+    $stmt = $pdo_videos->prepare("SELECT * FROM captions WHERE video_id = ?");
+    $stmt->execute([$video_id]);
+    $captions = $stmt->fetchAll();
+    
+    // Get annotations
+    $stmt = $pdo_videos->prepare("SELECT * FROM annotations WHERE video_id = ?");
+    $stmt->execute([$video_id]);
+    $annotations = $stmt->fetchAll();
+    
     // Get user info for comments
     foreach ($comments as &$comment) {
         $stmt = $pdo->prepare("SELECT username, display_name FROM accounts WHERE id = ?");
@@ -207,6 +217,34 @@ try {
             margin-right: 8px;
             margin-bottom: 5px;
         }
+        .video-actions {
+            margin-top: 15px;
+        }
+        .action-btn {
+            background: #3c4043;
+            color: #c7d5e0;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .action-btn:hover {
+            background: #66c0f4;
+        }
+        .annotation {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 2px solid #66c0f4;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -218,7 +256,76 @@ try {
             <div id="video-player" style="width: 100%; height: 500px; background: #000; border-radius: 4px;"></div>
             <script src="js/trailer-player.js"></script>
             <script>
-                new TrailerPlayer(document.getElementById('video-player'), '<?= htmlspecialchars($video['video_path']) ?>');
+                const player = new TrailerPlayer(document.getElementById('video-player'), '<?= htmlspecialchars($video['video_path']) ?>');
+                
+                // Add captions
+                <?php foreach ($captions as $caption): ?>
+                const track = document.createElement('track');
+                track.kind = 'subtitles';
+                track.src = '<?= htmlspecialchars($caption['file_path']) ?>';
+                track.srclang = '<?= htmlspecialchars($caption['language']) ?>';
+                track.label = '<?= htmlspecialchars($caption['label']) ?>';
+                player.video.appendChild(track);
+                <?php endforeach; ?>
+                
+                // Annotations system
+                const annotations = <?= json_encode($annotations) ?>;
+                const annotationContainer = document.createElement('div');
+                annotationContainer.style.position = 'absolute';
+                annotationContainer.style.top = '0';
+                annotationContainer.style.left = '0';
+                annotationContainer.style.width = '100%';
+                annotationContainer.style.height = '100%';
+                annotationContainer.style.pointerEvents = 'none';
+                document.getElementById('video-player').appendChild(annotationContainer);
+                
+                function updateAnnotations() {
+                    const currentTime = player.video.currentTime;
+                    const videoRect = player.video.getBoundingClientRect();
+                    const containerRect = document.getElementById('video-player').getBoundingClientRect();
+                    
+                    // Calculate video display size within container
+                    const videoAspect = player.video.videoWidth / player.video.videoHeight;
+                    const containerAspect = containerRect.width / containerRect.height;
+                    
+                    let displayWidth, displayHeight, offsetX = 0, offsetY = 0;
+                    
+                    if (videoAspect > containerAspect) {
+                        displayWidth = containerRect.width;
+                        displayHeight = containerRect.width / videoAspect;
+                        offsetY = (containerRect.height - displayHeight) / 2;
+                    } else {
+                        displayHeight = containerRect.height;
+                        displayWidth = containerRect.height * videoAspect;
+                        offsetX = (containerRect.width - displayWidth) / 2;
+                    }
+                    
+                    annotationContainer.innerHTML = '';
+                    
+                    annotations.forEach(annotation => {
+                        if (currentTime >= annotation.start_time && currentTime <= annotation.end_time) {
+                            const div = document.createElement('div');
+                            div.className = 'annotation';
+                            div.textContent = annotation.text;
+                            div.style.left = (offsetX + (annotation.x_percent / 100) * displayWidth) + 'px';
+                            div.style.top = (offsetY + (annotation.y_percent / 100) * displayHeight) + 'px';
+                            div.style.width = (annotation.width_percent / 100) * displayWidth + 'px';
+                            div.style.height = (annotation.height_percent / 100) * displayHeight + 'px';
+                            div.style.pointerEvents = 'auto';
+                            
+                            if (annotation.link_url) {
+                                div.onclick = () => window.open(annotation.link_url, '_blank');
+                                div.style.cursor = 'pointer';
+                            }
+                            
+                            annotationContainer.appendChild(div);
+                        }
+                    });
+                }
+                
+                player.video.addEventListener('timeupdate', updateAnnotations);
+                player.video.addEventListener('resize', updateAnnotations);
+                window.addEventListener('resize', updateAnnotations);
             </script>
         </div>
         
@@ -243,6 +350,14 @@ try {
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
+            
+            <div class="video-actions">
+                <a href="download.php?id=<?= $video_id ?>" class="action-btn">Download</a>
+                <a href="download.php?id=<?= $video_id ?>&watermark=1" class="action-btn">Download with Watermark</a>
+                <?php if ($user && $user['id'] == $video['owner_user_id']): ?>
+                    <a href="annotations.php?id=<?= $video_id ?>" class="action-btn">Edit Annotations</a>
+                <?php endif; ?>
+            </div>
         </div>
         
         <div style="margin-top: 20px;">
