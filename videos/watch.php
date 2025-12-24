@@ -41,6 +41,11 @@ try {
     $stmt->execute([$video_id]);
     $comments = $stmt->fetchAll();
     
+    // Get video tags
+    $stmt = $pdo_videos->prepare("SELECT t.name FROM tags t JOIN video_tags vt ON t.id = vt.tag_id WHERE vt.video_id = ?");
+    $stmt->execute([$video_id]);
+    $tags = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
     // Get user info for comments
     foreach ($comments as &$comment) {
         $stmt = $pdo->prepare("SELECT username, display_name FROM accounts WHERE id = ?");
@@ -189,6 +194,19 @@ try {
             font-size: 0.8rem;
             margin-top: 5px;
         }
+        .tags {
+            margin-top: 15px;
+        }
+        .tag {
+            display: inline-block;
+            background: #66c0f4;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-right: 8px;
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
@@ -215,6 +233,14 @@ try {
             <?php if ($video['description']): ?>
                 <div class="video-description">
                     <?= nl2br(htmlspecialchars($video['description'])) ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (!empty($tags)): ?>
+                <div class="tags">
+                    <?php foreach ($tags as $tag): ?>
+                        <span class="tag"><?= htmlspecialchars($tag) ?></span>
+                    <?php endforeach; ?>
                 </div>
             <?php endif; ?>
         </div>

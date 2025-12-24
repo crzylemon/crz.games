@@ -67,6 +67,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo_videos->prepare("UPDATE videos SET video_path = ?, thumbnail_path = ? WHERE id = ?");
             $stmt->execute([$video_path, $thumb_path, $video_id]);
             
+            // Handle tags
+            if (!empty($_POST['tags'])) {
+                $tags = array_map('trim', explode(',', $_POST['tags']));
+                foreach ($tags as $tag_name) {
+                    if (!empty($tag_name)) {
+                        // Insert tag if it doesn't exist
+                        $stmt = $pdo_videos->prepare("INSERT IGNORE INTO tags (name) VALUES (?)");
+                        $stmt->execute([$tag_name]);
+                        
+                        // Get tag ID
+                        $stmt = $pdo_videos->prepare("SELECT id FROM tags WHERE name = ?");
+                        $stmt->execute([$tag_name]);
+                        $tag_id = $stmt->fetchColumn();
+                        
+                        // Link video to tag
+                        $stmt = $pdo_videos->prepare("INSERT IGNORE INTO video_tags (video_id, tag_id) VALUES (?, ?)");
+                        $stmt->execute([$video_id, $tag_id]);
+                    }
+                }
+            }
+            
             header('Location: watch.php?id=' . $video_id);
             exit;
         } catch (Exception $e) {
@@ -169,6 +190,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="form-group">
                     <label class="form-label" for="thumbnail">Thumbnail (optional)</label>
                     <input type="file" id="thumbnail" name="thumbnail" class="form-input" accept="image/*">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="tags">Tags (comma-separated)</label>
+                    <input type="text" id="tags" name="tags" class="form-input" placeholder="gaming, funny, tutorial">
                 </div>
 
                 <div class="form-group">
