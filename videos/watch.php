@@ -332,7 +332,7 @@ try {
         <div class="video-details">
             <div class="video-title"><?= htmlspecialchars($video['title']) ?></div>
             <div class="video-meta">
-                <span class="video-author"><?= htmlspecialchars($video['display_name'] ?: $video['username']) ?></span> • 
+                <a href="../user/profile.php?user=<?= htmlspecialchars($video['username']) ?>" class="video-author" style="text-decoration: none;"><?= htmlspecialchars($video['display_name'] ?: $video['username']) ?></a> • 
                 <?= number_format($video['views']) ?> views • 
                 <?= date('M j, Y', strtotime($video['created_at'])) ?>
             </div>
@@ -355,7 +355,7 @@ try {
                 <a href="download.php?id=<?= $video_id ?>" class="action-btn">Download</a>
                 <a href="download.php?id=<?= $video_id ?>&watermark=1" class="action-btn">Download with Watermark</a>
                 <?php if ($user && $user['id'] == $video['owner_user_id']): ?>
-                    <a href="annotations.php?id=<?= $video_id ?>" class="action-btn">Edit Annotations</a>
+                    <a href="editor.php?id=<?= $video_id ?>" class="action-btn">Edit Video</a>
                 <?php endif; ?>
             </div>
         </div>

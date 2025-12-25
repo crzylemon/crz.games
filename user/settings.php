@@ -8,6 +8,7 @@ $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $display_name = trim($_POST['display_name'] ?? '');
+    $bio = trim($_POST['bio'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $current_password = $_POST['current_password'] ?? '';
     $new_password = $_POST['new_password'] ?? '';
@@ -34,13 +35,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $password_hash = password_hash($new_password, PASSWORD_DEFAULT);
                     $gjp2_hash = hash('sha1', $new_password . 'mI29fmAnxgTs');
                     $gjp2_hash = password_hash($gjp2_hash, PASSWORD_DEFAULT);
-                    $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, email = ?, password_hash = ?, gd_password = ? WHERE id = ?");
-                    $stmt->execute([$display_name, $email ?: '', $password_hash, $gjp2_hash, $user['id']]);
+                    $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, bio = ?, email = ?, password_hash = ?, gd_password = ? WHERE id = ?");
+                    $stmt->execute([$display_name, $bio, $email ?: '', $password_hash, $gjp2_hash, $user['id']]);
                     $success = 'Settings updated successfully';
                 }
             } else {
-                $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, email = ? WHERE id = ?");
-                $stmt->execute([$display_name, $email ?: '', $user['id']]);
+                $stmt = $pdo->prepare("UPDATE accounts SET display_name = ?, bio = ?, email = ? WHERE id = ?");
+                $stmt->execute([$display_name, $bio, $email ?: '', $user['id']]);
                 $success = 'Settings updated successfully';
             }
             
@@ -92,6 +93,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <input type="text" id="display_name" name="display_name" required maxlength="64" 
                                value="<?php echo htmlspecialchars($user['display_name']); ?>"
                                style="width: 100%; padding: 12px; background: #2a2a2a; border: 1px solid #404040; border-radius: 4px; color: #fff; font-size: 16px;">
+                    </div>
+                    
+                    <div class="info-section">
+                        <label class="info-title" for="bio">Bio</label>
+                        <textarea id="bio" name="bio" maxlength="500" rows="4"
+                                  style="width: 100%; padding: 12px; background: #2a2a2a; border: 1px solid #404040; border-radius: 4px; color: #fff; font-size: 16px; resize: vertical;"
+                                  placeholder="Tell others about yourself..."><?php echo htmlspecialchars($user['bio'] ?? ''); ?></textarea>
                     </div>
                     
                     <div class="info-section">
