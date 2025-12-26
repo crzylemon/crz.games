@@ -373,6 +373,15 @@ if (!($game['status'] === 'PLAYABLE' || $game['status'] === 'PUBLIC_UNPLAYABLE' 
                             <iframe width="100%" height="315" src="https://player.vimeo.com/video/<?= htmlspecialchars($video_id) ?>" frameborder="0" allowfullscreen></iframe>
                         <?php elseif (strpos($game['trailer_url'], 'twitch.tv') !== false): ?>
                             <iframe width="100%" height="315" src="<?= htmlspecialchars($game['trailer_url']) ?>" frameborder="0" allowfullscreen></iframe>
+                        <?php elseif (strpos($game['trailer_url'], 'crz.network') !== false): ?>
+                            <!-- if it starts with crz.network:21212/videos/embed.php or https://crz.network:21212/videos/embed.php, use the embed normally.
+                            But if it's somethinglike https://crz.network:21212/videos/watch.php then transform watch.php into embed.php
+                            -->
+                            <?php $url = $game['trailer_url']; ?>
+                            <?php if (strpos($game['trailer_url'], 'crz.network:21212/videos/watch.php') !== false): ?>
+                                <?php $url = str_replace('watch.php', 'embed.php', $url); ?>
+                            <?php endif; ?>
+                            <iframe width="100%" height="315" src="<?= htmlspecialchars($url) ?>" frameborder="0" allowfullscreen></iframe>
                         <?php else: ?>
                             <video width="100%" height="315" controls style="background: #000; border-radius: 4px;">
                                 <source src="<?= htmlspecialchars($game['trailer_url']) ?>" type="video/mp4">

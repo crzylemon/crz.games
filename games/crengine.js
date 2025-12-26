@@ -3164,18 +3164,17 @@ class CRE {
                 entity.networkId = data.playerId;
                 entity.CRE.multiplayer = true;
                 entity.CRE.isClient = false;
+                
+                // Apply networked defaults for new network entities
+                if (entity.CRE.networkedDefaults) {
+                    Object.keys(entity.CRE.networkedDefaults).forEach(varPath => {
+                        this.setNestedProperty(entity, varPath, entity.CRE.networkedDefaults[varPath]);
+                    });
+                }
             }
         }
         
         if (entity && entity.CRE) {
-            // Apply networked defaults first (only once when entity is created)
-            if (entity.CRE.networkedDefaults && !entity._defaultsApplied) {
-                Object.keys(entity.CRE.networkedDefaults).forEach(varPath => {
-                    this.setNestedProperty(entity, varPath, entity.CRE.networkedDefaults[varPath]);
-                });
-                entity._defaultsApplied = true;
-            }
-            
             // Update networked variables
             if (data.networkedData) {
                 Object.keys(data.networkedData).forEach(varPath => {
