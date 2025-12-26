@@ -1174,6 +1174,13 @@ class CRE {
             this.saveBinds();
         }
     }
+    
+    // Set default hostname if not already set
+    setDefaultHostname(hostname) {
+        if (this.GetConVar('hostname') === 'CRENGINE Server') {
+            this.hostname.value = hostname;
+        }
+    }
 
     // Utility functions
     Msg(text) { 
