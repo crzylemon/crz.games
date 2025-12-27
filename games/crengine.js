@@ -3554,6 +3554,11 @@ function restartGame() {
     cre.UTIL_RESET();
     if (gameCode) {
         try {
+            // Validate that gameCode is actually JavaScript, not HTML
+            if (gameCode.trim().startsWith('<')) {
+                showError(new Error('gameCode appears to be HTML, probably a 404.'));
+                return;
+            }
             new Function("ENGINE", gameCode)(cre);
         } catch (e) {
             showError(e);
