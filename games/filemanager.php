@@ -4,16 +4,11 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-echo "Debug: Starting filemanager.php<br>";
 
 session_start();
 require_once '../db.php';
 require_once 'includes/admin.php';
-
-echo "Debug: About to check admin<br>";
 requireAdmin();
-echo "Debug: Admin check passed<br>";
-
 $basePath = '/home/crzy/Development/crz.games';
 $currentPath = isset($_GET['path']) ? $_GET['path'] : '';
 $fullPath = $basePath . '/' . ltrim($currentPath, '/');

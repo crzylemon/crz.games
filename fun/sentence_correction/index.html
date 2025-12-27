@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentence Corrector</title>
+    <style>body { font-family: monospace; }</style>
+</head>
+<body>
+    <h1>Sentence Corrector</h1>
+    <a href="../">Go back</a><br><br>
+    
+    <textarea id="input" rows="10" cols="50" placeholder="Enter text to correct..."></textarea><br><br>
+    <button onclick="correct()">Correct</button><br><br>
+    
+    <div id="output"></div>
+
+    <script>
+    function correct() {
+        let text = document.getElementById('input').value;
+        
+        text = text.replace(/\?\!/g, '‽');
+        text = text.replace(/\!\?/g, '‽');
+        text = text.replace(/\.\.\./g, '…');
+        text = text.replace(/--/g, '—');
+        text = text.replace(/\(c\)/gi, '©');
+        text = text.replace(/\(r\)/gi, '®');
+        text = text.replace(/\(tm\)/gi, '™');
+        
+        document.getElementById('output').innerHTML = '<strong>Corrected:</strong><br>' + text;
+    }
+    </script>
+</body>
+</html>
